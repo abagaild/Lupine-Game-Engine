@@ -45,4 +45,6 @@ There are many ways you can contribute to the project, and they're all ever valu
 (contribution guide coming soon)
 
 ## Documentation and Demo Project
-(coming soon)
+(Demo Project coming soon)
+</br> </br> 
+Documentation can be accessed in the [GitHub Wiki](https://kurokamori.itch.io/)
