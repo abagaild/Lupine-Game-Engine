@@ -1,1 +1,2 @@
-# Lupine-Game-Engine
+# Lupine Game Engine
+## Created by Kurokamori
