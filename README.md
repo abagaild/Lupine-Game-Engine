@@ -40,5 +40,5 @@ Due to an issue in my development environment, the make file is currently hardco
 There are many ways you can contribute to the project, and they're all ever valuable, from contributing directly to source code, to reporting bugs, to requesting features, any community feedback is greatly appreciated.</br>
 (contribution guide coming soon)
 
-##Documentation and Demo Project
+## Documentation and Demo Project
 (coming soon)
