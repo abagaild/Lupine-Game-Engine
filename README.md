@@ -19,6 +19,10 @@ Though not currently supported the infrastructure exists for eventual export to 
 ## Free and Open Source
 I believe all tools should be free -- so I'm putting it into practice. Lupine Engine is 100% free to download and use, no royalties, no premium features, no caveats. </br>
 Furthermore, the engine is completely open-source and welcomes any contributions that anyone may be interested in providing. For the last 6 years this engine has been a passion project of mine, and it would mean the world to me to see others contribute to the efforts.
+</br></br>
+Engine Provided under the MIT Permissive License
+</br>
+
 ![image](https://github.com/user-attachments/assets/f44b8373-a0ba-402e-9863-3b996111c8b7)
 
 ## Installation Instructions
