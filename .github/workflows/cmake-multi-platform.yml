@@ -71,21 +71,28 @@ jobs:
         choco install cmake git ninja -y
 
         # Ensure Visual Studio is available
-        echo "Visual Studio installation check..."
+        Write-Host "Visual Studio installation check..."
         if (Get-Command "cl.exe" -ErrorAction SilentlyContinue) {
-          echo "✓ Visual Studio compiler found"
+          Write-Host "✓ Visual Studio compiler found"
         } else {
-          echo "Installing Visual Studio Build Tools..."
+          Write-Host "Installing Visual Studio Build Tools..."
           choco install visualstudio2022buildtools --package-parameters "--add Microsoft.VisualStudio.Workload.VCTools --add Microsoft.VisualStudio.Component.VC.Tools.x86.x64 --add Microsoft.VisualStudio.Component.Windows10SDK.19041" -y
         }
 
         # Run setup script (will use precompiled libraries for speed)
-        echo "Running Lupine Engine setup script..."
-        python setup_build_environment.py
+        Write-Host "Running Lupine Engine setup script..."
+        Write-Host "Current directory: $(Get-Location)"
+        Write-Host "Files in directory: $(Get-ChildItem -Name)"
+        if (Test-Path "setup_build_environment.py") {
+          python setup_build_environment.py
 
-        # Verify setup
-        echo "Verifying setup..."
-        python setup_build_environment.py --verify-only
+          # Verify setup
+          Write-Host "Verifying setup..."
+          python setup_build_environment.py --verify-only
+        } else {
+          Write-Host "❌ setup_build_environment.py not found!"
+          exit 1
+        }
       shell: powershell
 
     - name: Install system dependencies (Linux)
@@ -108,7 +115,7 @@ jobs:
           libasound2-dev libpulse-dev
 
         # Install Qt6 for editor
-        sudo apt-get install -y qt6-base-dev qt6-tools-dev qt6-tools-dev-tools qt6-opengl-dev
+        sudo apt-get install -y qt6-base-dev qt6-tools-dev qt6-tools-dev-tools
 
         # Install virtual display for testing
         sudo apt-get install -y xvfb
@@ -157,11 +164,18 @@ jobs:
 
         # Run setup script (will use precompiled libraries for speed)
         echo "Running Lupine Engine setup script..."
-        python3 setup_build_environment.py
+        echo "Current directory: $(pwd)"
+        echo "Files in directory: $(ls -la)"
+        if [ -f "setup_build_environment.py" ]; then
+          python3 setup_build_environment.py
 
-        # Verify setup
-        echo "Verifying setup..."
-        python3 setup_build_environment.py --verify-only
+          # Verify setup
+          echo "Verifying setup..."
+          python3 setup_build_environment.py --verify-only
+        else
+          echo "❌ setup_build_environment.py not found!"
+          exit 1
+        fi
 
     - name: Configure CMake
       run: |
