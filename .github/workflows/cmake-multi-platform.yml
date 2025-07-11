@@ -1,0 +1,77 @@
+name: CMake on multiple platforms
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Windows (MSVC)
+          - os: windows-latest
+            c_compiler: cl
+            cpp_compiler: cl
+            build_type: Release
+
+          # Linux (GCC)
+          - os: ubuntu-latest
+            c_compiler: gcc
+            cpp_compiler: g++
+            build_type: Release
+
+          # Linux (Clang)
+          - os: ubuntu-latest
+            c_compiler: clang
+            cpp_compiler: clang++
+            build_type: Release
+
+          # macOS universal (x86_64 + arm64)
+          - os: macos-latest
+            c_compiler: clang
+            cpp_compiler: clang++
+            build_type: Release
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set build directory
+        id: vars
+        run: echo "BUILD_DIR=${{ github.workspace }}/build" >> $GITHUB_OUTPUT
+        shell: bash
+
+      - name: Configure CMake (macOS universal)
+        if: matrix.os == 'macos-latest'
+        run: |
+          cmake -S . -B "$BUILD_DIR" \
+            -DCMAKE_C_COMPILER=${{ matrix.c_compiler }} \
+            -DCMAKE_CXX_COMPILER=${{ matrix.cpp_compiler }} \
+            -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+            -DCMAKE_OSX_ARCHITECTURES="x86_64;arm64" \
+            -DTHIRDPARTY_DIR="${{ github.workspace }}/thirdparty"
+        shell: bash
+
+      - name: Configure CMake (Windows & Linux)
+        if: matrix.os != 'macos-latest'
+        run: |
+          cmake -S . -B "$BUILD_DIR" \
+            -DCMAKE_C_COMPILER=${{ matrix.c_compiler }} \
+            -DCMAKE_CXX_COMPILER=${{ matrix.cpp_compiler }} \
+            -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+            -DTHIRDPARTY_DIR="${{ github.workspace }}/thirdparty"
+        shell: bash
+
+      - name: Build
+        run: cmake --build "$BUILD_DIR" --config ${{ matrix.build_type }}
+        shell: bash
+
+      - name: Test
+        run: ctest --output-on-failure --build-config ${{ matrix.build_type }} -C ${{ matrix.build_type }}
+        working-directory: ${{ steps.vars.outputs.BUILD_DIR }}
+        shell: bash
