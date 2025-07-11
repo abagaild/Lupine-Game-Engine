@@ -1,0 +1,239 @@
+name: Build Precompiled Libraries
+
+on:
+  workflow_dispatch:
+    inputs:
+      create_release:
+        description: 'Create GitHub release'
+        required: true
+        default: true
+        type: boolean
+      release_tag:
+        description: 'Release tag'
+        required: false
+        default: ''
+  schedule:
+    # Build weekly on Sundays at 2 AM UTC
+    - cron: '0 2 * * 0'
+  push:
+    paths:
+      - 'setup_build_environment.py'
+      - 'scripts/build_precompiled_libs.py'
+      - '.github/workflows/build-precompiled-libs.yml'
+
+jobs:
+  build-libraries:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: "Windows x64"
+            os: windows-latest
+            platform: Windows
+            triplet: x64-windows-static
+            
+          - name: "Linux x64"
+            os: ubuntu-latest
+            platform: Linux
+            triplet: x64-linux
+            
+          - name: "macOS x64"
+            os: macos-13
+            platform: Mac-OSX
+            triplet: x64-osx
+            
+          - name: "macOS ARM64"
+            os: macos-latest
+            platform: Mac-ARM64
+            triplet: arm64-osx
+
+    runs-on: ${{ matrix.os }}
+    name: Build ${{ matrix.name }}
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Setup Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Cache dependencies
+      uses: actions/cache@v4
+      with:
+        path: |
+          thirdparty
+          ~/.cache/pip
+          ~/vcpkg
+          /usr/local/Homebrew
+        key: precompiled-${{ runner.os }}-${{ matrix.triplet }}-${{ hashFiles('setup_build_environment.py') }}
+        restore-keys: |
+          precompiled-${{ runner.os }}-${{ matrix.triplet }}-
+          precompiled-${{ runner.os }}-
+
+    - name: Install system dependencies (Windows)
+      if: matrix.platform == 'Windows'
+      run: |
+        choco install cmake git ninja -y
+        python setup_build_environment.py --force --no-qt
+      shell: powershell
+
+    - name: Install system dependencies (Linux)
+      if: matrix.platform == 'Linux'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential cmake ninja-build pkg-config
+        python3 setup_build_environment.py --force --no-qt
+
+    - name: Install system dependencies (macOS)
+      if: matrix.platform == 'Mac-OSX' || matrix.platform == 'Mac-ARM64'
+      run: |
+        brew update
+        brew install cmake ninja pkg-config
+        python3 setup_build_environment.py --force --no-qt
+
+    - name: Build precompiled libraries
+      run: |
+        python3 scripts/build_precompiled_libs.py --platform ${{ matrix.platform }}
+      shell: bash
+
+    - name: Upload platform artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: precompiled-libs-${{ matrix.triplet }}
+        path: |
+          precompiled_packages/lupine-libs-${{ matrix.triplet }}.zip
+          precompiled_packages/lupine-libs-${{ matrix.triplet }}.json
+        retention-days: 30
+
+  create-release:
+    needs: build-libraries
+    runs-on: ubuntu-latest
+    if: github.event.inputs.create_release == 'true' || github.event_name == 'schedule'
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Download all artifacts
+      uses: actions/download-artifact@v4
+      with:
+        path: precompiled_packages
+        merge-multiple: true
+
+    - name: Flatten artifacts
+      run: |
+        mkdir -p release_packages
+        # With v4, artifacts are already flattened when merge-multiple is true
+        find precompiled_packages -name "*.zip" -exec cp {} release_packages/ \;
+        find precompiled_packages -name "*.json" -exec cp {} release_packages/ \;
+        ls -la release_packages/
+        
+    - name: Generate release tag
+      id: tag
+      run: |
+        if [ -n "${{ github.event.inputs.release_tag }}" ]; then
+          echo "tag=${{ github.event.inputs.release_tag }}" >> $GITHUB_OUTPUT
+        else
+          echo "tag=v$(date +'%Y%m%d')-$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+        fi
+        
+    - name: Create master manifest
+      run: |
+        python3 -c "
+        import json
+        import os
+        from datetime import datetime
+        from pathlib import Path
+        
+        packages_dir = Path('release_packages')
+        manifest = {
+            'version': '1.0.0',
+            'generated': datetime.now().isoformat(),
+            'tag': '${{ steps.tag.outputs.tag }}',
+            'packages': {}
+        }
+        
+        for json_file in packages_dir.glob('lupine-libs-*.json'):
+            with open(json_file) as f:
+                info = json.load(f)
+            
+            platform = info['platform']
+            triplet = info['triplet']
+            zip_file = f'lupine-libs-{triplet}.zip'
+            
+            if (packages_dir / zip_file).exists():
+                manifest['packages'][platform] = {
+                    'triplet': triplet,
+                    'package_file': zip_file,
+                    'info_file': json_file.name,
+                    'size_mb': info.get('total_size_mb', 0)
+                }
+        
+        with open('release_packages/manifest.json', 'w') as f:
+            json.dump(manifest, f, indent=2)
+        
+        print('Created manifest with platforms:', list(manifest['packages'].keys()))
+        "
+        
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: ${{ steps.tag.outputs.tag }}
+        name: Precompiled Libraries ${{ steps.tag.outputs.tag }}
+        body: |
+          ## Precompiled Static Libraries for Lupine Engine
+          
+          This release contains precompiled static libraries for fast setup across platforms.
+          
+          ### Available Platforms:
+          - Windows x64 (MSVC static)
+          - Linux x64 (GCC static)
+          - macOS x64 (Clang static)
+          - macOS ARM64 (Clang static)
+          
+          ### Usage:
+          1. Download the appropriate package for your platform
+          2. Extract to your `thirdparty/` directory
+          3. Run CMake configuration
+          
+          ### Automated Setup:
+          The `setup_build_environment.py` script will automatically download and extract these packages.
+          
+          Generated on: ${{ github.run_id }}
+          Commit: ${{ github.sha }}
+        files: |
+          release_packages/*.zip
+          release_packages/*.json
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  test-precompiled:
+    needs: create-release
+    strategy:
+      matrix:
+        os: [windows-latest, ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Setup Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+        
+    - name: Test precompiled library download
+      run: |
+        # Test that the setup script can download the precompiled libraries
+        python3 setup_build_environment.py --verify-only
+      shell: bash
+      
+    - name: Test CMake configuration
+      run: |
+        cmake -B test_build -S . -DCMAKE_BUILD_TYPE=Release -DLUPINE_ENABLE_EDITOR=OFF
+      shell: bash
