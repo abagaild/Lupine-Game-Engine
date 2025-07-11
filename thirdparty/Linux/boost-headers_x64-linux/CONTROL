@@ -1,7 +1,0 @@
-Package: boost-headers
-Version: 1.88.0
-Depends: boost-cmake
-Architecture: x64-linux
-Multi-Arch: same
-Abi: 2e150f11eccfddde07e9edea8a3e3669b1b08987c37d6a2855fe80e75cecc3e0
-Description: Boost headers module

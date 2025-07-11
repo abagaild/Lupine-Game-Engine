@@ -1,8 +1,0 @@
-Package: mpg123
-Version: 1.32.9
-Port-Version: 1
-Depends: vcpkg-cmake, vcpkg-cmake-config
-Architecture: x64-linux
-Multi-Arch: same
-Abi: 846c1167c3758f8e235a4085d1f883fb57c7b3d69e81631479ebda4d656687bf
-Description: mpg123 is a real time MPEG 1.0/2.0/2.5 audio player/decoder for layers 1, 2 and 3 (MPEG 1.0 layer 3 also known as MP3).

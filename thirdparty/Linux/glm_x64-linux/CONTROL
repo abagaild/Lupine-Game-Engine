@@ -1,8 +1,0 @@
-Package: glm
-Version: 1.0.1
-Port-Version: 3
-Depends: vcpkg-cmake, vcpkg-cmake-config
-Architecture: x64-linux
-Multi-Arch: same
-Abi: 8b0a36da6edbd8e291587eaf881485cb8ec9bf6fc7d8108a871c68c2336c6c18
-Description: OpenGL Mathematics (GLM)

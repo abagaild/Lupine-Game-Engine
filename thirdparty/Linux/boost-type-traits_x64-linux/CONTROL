@@ -1,7 +1,0 @@
-Package: boost-type-traits
-Version: 1.88.0
-Depends: boost-cmake, boost-config, boost-headers, boost-static-assert
-Architecture: x64-linux
-Multi-Arch: same
-Abi: 004d990671a9c661238030b6deecc3a4cc26ac555e3395e237ab22da5034c896
-Description: Boost type_traits module
