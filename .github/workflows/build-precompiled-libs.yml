@@ -77,11 +77,11 @@ jobs:
       run: |
         choco install cmake git ninja -y
         Write-Host "Current directory: $(Get-Location)"
-        if (Test-Path "scripts/setup_build_environment.py") {
-          python scripts/setup_build_environment.py --force --no-qt
+        if (Test-Path "scripts\setup_build_environment.py") {
+          python scripts\setup_build_environment.py --force --no-qt
         } else {
-          Write-Host "❌ scripts/setup_build_environment.py not found!"
-          Get-ChildItem -Recurse -Name "*.py"
+          Write-Host "scripts\setup_build_environment.py not found!"
+          Get-ChildItem -Recurse -Filter "*.py" | Select-Object -ExpandProperty Name
           exit 1
         }
       shell: powershell
