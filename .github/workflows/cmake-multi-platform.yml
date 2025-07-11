@@ -86,7 +86,7 @@ jobs:
         Get-ChildItem -Name
 
         if (Test-Path "scripts\setup_build_environment.py") {
-          python scripts\setup_build_environment.py
+          python scripts\setup_build_environment.py --dev-only
 
           # Verify setup
           Write-Host "Verifying setup..."
@@ -108,18 +108,21 @@ jobs:
         # Install build essentials
         sudo apt-get install -y build-essential cmake ninja-build pkg-config git
 
-        # Install development libraries
+        # Install development libraries (try to install what's available)
         sudo apt-get install -y \
           libsdl2-dev libsdl2-image-dev libsdl2-ttf-dev libsdl2-mixer-dev \
-          libassimp-dev libbullet-dev liblua5.4-dev libyaml-cpp-dev \
-          libspdlog-dev libpng-dev libjpeg-dev libfreetype-dev \
+          libassimp-dev liblua5.4-dev libyaml-cpp-dev \
+          libpng-dev libjpeg-dev libfreetype-dev \
           zlib1g-dev libssl-dev libsqlite3-dev \
           libogg-dev libvorbis-dev libflac-dev libopus-dev \
           libx11-dev libxext-dev libxrender-dev libgl1-mesa-dev \
-          libasound2-dev libpulse-dev
+          libasound2-dev libpulse-dev || echo "Some packages failed to install, continuing..."
 
-        # Install Qt6 for editor
-        sudo apt-get install -y qt6-base-dev qt6-tools-dev qt6-tools-dev-tools
+        # Try to install Qt6 for editor (fallback to Qt5 if needed)
+        if ! sudo apt-get install -y qt6-base-dev qt6-tools-dev qt6-tools-dev-tools; then
+          echo "Qt6 installation failed, trying Qt5..."
+          sudo apt-get install -y qtbase5-dev qttools5-dev qttools5-dev-tools || echo "Qt installation failed, continuing without Qt..."
+        fi
 
         # Install virtual display for testing
         sudo apt-get install -y xvfb
@@ -129,7 +132,7 @@ jobs:
         echo "Current directory: $(pwd)"
         echo "Files in directory: $(ls -la)"
         if [ -f "scripts/setup_build_environment.py" ]; then
-          python3 scripts/setup_build_environment.py --force
+          python3 scripts/setup_build_environment.py --force --dev-only
 
           # Verify setup
           echo "Verifying setup..."
@@ -180,7 +183,7 @@ jobs:
         echo "Current directory: $(pwd)"
         echo "Files in directory: $(ls -la)"
         if [ -f "scripts/setup_build_environment.py" ]; then
-          python3 scripts/setup_build_environment.py
+          python3 scripts/setup_build_environment.py --dev-only
 
           # Verify setup
           echo "Verifying setup..."
@@ -195,6 +198,11 @@ jobs:
     - name: Configure CMake
       run: |
         echo "=== Configuring CMake ==="
+        echo "Current directory: $(pwd)"
+        echo "Files in current directory:"
+        ls -la
+        echo "CMake version:"
+        cmake --version
 
         # Platform-specific configuration
         CMAKE_ARGS="-B build -S . -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} -DLUPINE_ENABLE_EDITOR=ON -DLUPINE_ENABLE_EXPORT=ON"
@@ -218,15 +226,38 @@ jobs:
         # Add platform config if available
         if [ -f "cmake/PlatformConfig.cmake" ]; then
           CMAKE_ARGS="$CMAKE_ARGS -C cmake/PlatformConfig.cmake"
+          echo "✅ Using platform config: cmake/PlatformConfig.cmake"
+        else
+          echo "⚠️  Platform config not found, using default configuration"
         fi
 
         echo "CMake command: cmake $CMAKE_ARGS"
-        eval "cmake $CMAKE_ARGS"
+        if ! eval "cmake $CMAKE_ARGS"; then
+          echo "❌ CMake configuration failed!"
+          echo "Checking for CMake error logs..."
+          if [ -f "build/CMakeFiles/CMakeError.log" ]; then
+            echo "=== CMakeError.log ==="
+            cat build/CMakeFiles/CMakeError.log
+          fi
+          if [ -f "build/CMakeFiles/CMakeOutput.log" ]; then
+            echo "=== CMakeOutput.log ==="
+            tail -50 build/CMakeFiles/CMakeOutput.log
+          fi
+          exit 1
+        fi
       shell: bash
 
     - name: Build
       run: |
-        cmake --build build --config ${{ matrix.build_type }} --parallel
+        echo "=== Building Project ==="
+        if ! cmake --build build --config ${{ matrix.build_type }} --parallel; then
+          echo "❌ Build failed!"
+          echo "Checking build directory contents..."
+          ls -la build/ || true
+          ls -la build/bin/ || true
+          exit 1
+        fi
+        echo "✅ Build completed successfully"
       shell: bash
       
     - name: Verify build outputs
