@@ -67,7 +67,7 @@ jobs:
           ~/.cache/pip
           ~/vcpkg
           /usr/local/Homebrew
-        key: precompiled-${{ runner.os }}-${{ matrix.triplet }}-${{ hashFiles('setup_build_environment.py') }}
+        key: precompiled-${{ runner.os }}-${{ matrix.triplet }}-${{ hashFiles('scripts/setup_build_environment.py') }}
         restore-keys: |
           precompiled-${{ runner.os }}-${{ matrix.triplet }}-
           precompiled-${{ runner.os }}-
@@ -77,10 +77,11 @@ jobs:
       run: |
         choco install cmake git ninja -y
         Write-Host "Current directory: $(Get-Location)"
-        if (Test-Path "setup_build_environment.py") {
-          python setup_build_environment.py --force --no-qt
+        if (Test-Path "scripts/setup_build_environment.py") {
+          python scripts/setup_build_environment.py --force --no-qt
         } else {
-          Write-Host "❌ setup_build_environment.py not found!"
+          Write-Host "❌ scripts/setup_build_environment.py not found!"
+          Get-ChildItem -Recurse -Name "*.py"
           exit 1
         }
       shell: powershell
@@ -90,18 +91,38 @@ jobs:
       run: |
         sudo apt-get update
         sudo apt-get install -y build-essential cmake ninja-build pkg-config
-        python3 setup_build_environment.py --force --no-qt
+        if [ -f "scripts/setup_build_environment.py" ]; then
+          python3 scripts/setup_build_environment.py --force --no-qt
+        else
+          echo "❌ scripts/setup_build_environment.py not found!"
+          find . -name "*.py" -type f
+          exit 1
+        fi
 
     - name: Install system dependencies (macOS)
       if: matrix.platform == 'Mac-OSX' || matrix.platform == 'Mac-ARM64'
       run: |
         brew update
         brew install cmake ninja pkg-config
-        python3 setup_build_environment.py --force --no-qt
+        if [ -f "scripts/setup_build_environment.py" ]; then
+          python3 scripts/setup_build_environment.py --force --no-qt
+        else
+          echo "❌ scripts/setup_build_environment.py not found!"
+          find . -name "*.py" -type f
+          exit 1
+        fi
 
     - name: Build precompiled libraries
       run: |
-        python3 scripts/build_precompiled_libs.py --platform ${{ matrix.platform }}
+        echo "Current directory: $(pwd)"
+        echo "Available Python files:"
+        find . -name "*.py" -type f
+        if [ -f "scripts/build_precompiled_libs.py" ]; then
+          python3 scripts/build_precompiled_libs.py --platform ${{ matrix.platform }}
+        else
+          echo "❌ scripts/build_precompiled_libs.py not found!"
+          exit 1
+        fi
       shell: bash
 
     - name: Upload platform artifacts
@@ -236,7 +257,12 @@ jobs:
     - name: Test precompiled library download
       run: |
         # Test that the setup script can download the precompiled libraries
-        python3 setup_build_environment.py --verify-only
+        if [ -f "scripts/setup_build_environment.py" ]; then
+          python3 scripts/setup_build_environment.py --verify-only
+        else
+          echo "❌ scripts/setup_build_environment.py not found!"
+          exit 1
+        fi
       shell: bash
       
     - name: Test CMake configuration
