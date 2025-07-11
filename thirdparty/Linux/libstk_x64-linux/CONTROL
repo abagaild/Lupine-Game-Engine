@@ -1,0 +1,8 @@
+Package: libstk
+Version: 4.6.1
+Port-Version: 3
+Depends: vcpkg-cmake, vcpkg-cmake-config
+Architecture: x64-linux
+Multi-Arch: same
+Abi: 4bca179ca28a57cfb972280fb388f3a26c48d3936c9fb7d2e23b00836fdc122d
+Description: The Synthesis ToolKit in C++ (STK) is a set of open source audio signal processing and algorithmic synthesis classes written in the C++ programming language.

@@ -1,0 +1,8 @@
+Package: gperf
+Version: 3.1
+Port-Version: 7
+Depends: vcpkg-cmake, vcpkg-cmake-config
+Architecture: x64-linux
+Multi-Arch: same
+Abi: a3e7f88aef07557ee33ffd7adce77aec26309b655a94aa0e9ba9e1135231e262
+Description: GNU perfect hash function generator
