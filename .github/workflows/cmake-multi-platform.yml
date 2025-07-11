@@ -59,7 +59,7 @@ jobs:
           ~/.cache/pip
           ~/vcpkg
           /usr/local/Homebrew
-        key: ${{ runner.os }}-${{ matrix.triplet }}-deps-${{ hashFiles('setup_build_environment.py') }}
+        key: ${{ runner.os }}-${{ matrix.triplet }}-deps-${{ hashFiles('scripts/setup_build_environment.py') }}
         restore-keys: |
           ${{ runner.os }}-${{ matrix.triplet }}-deps-
           ${{ runner.os }}-deps-
@@ -83,14 +83,16 @@ jobs:
         Write-Host "Running Lupine Engine setup script..."
         Write-Host "Current directory: $(Get-Location)"
         Write-Host "Files in directory: $(Get-ChildItem -Name)"
-        if (Test-Path "setup_build_environment.py") {
-          python setup_build_environment.py
+        if (Test-Path "scripts/setup_build_environment.py") {
+          python scripts/setup_build_environment.py
 
           # Verify setup
           Write-Host "Verifying setup..."
-          python setup_build_environment.py --verify-only
+          python scripts/setup_build_environment.py --verify-only
         } else {
-          Write-Host "❌ setup_build_environment.py not found!"
+          Write-Host "❌ scripts/setup_build_environment.py not found!"
+          Write-Host "Available files:"
+          Get-ChildItem -Recurse -Name "*.py"
           exit 1
         }
       shell: powershell
@@ -166,14 +168,16 @@ jobs:
         echo "Running Lupine Engine setup script..."
         echo "Current directory: $(pwd)"
         echo "Files in directory: $(ls -la)"
-        if [ -f "setup_build_environment.py" ]; then
-          python3 setup_build_environment.py
+        if [ -f "scripts/setup_build_environment.py" ]; then
+          python3 scripts/setup_build_environment.py
 
           # Verify setup
           echo "Verifying setup..."
-          python3 setup_build_environment.py --verify-only
+          python3 scripts/setup_build_environment.py --verify-only
         else
-          echo "❌ setup_build_environment.py not found!"
+          echo "❌ scripts/setup_build_environment.py not found!"
+          echo "Available Python files:"
+          find . -name "*.py" -type f
           exit 1
         fi
 
