@@ -45,14 +45,14 @@ jobs:
       uses: actions/checkout@v4
       with:
         submodules: recursive
-        
+
     - name: Setup Python
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
         python-version: '3.11'
-        
+
     - name: Cache dependencies
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: |
           thirdparty
@@ -79,9 +79,9 @@ jobs:
           choco install visualstudio2022buildtools --package-parameters "--add Microsoft.VisualStudio.Workload.VCTools --add Microsoft.VisualStudio.Component.VC.Tools.x86.x64 --add Microsoft.VisualStudio.Component.Windows10SDK.19041" -y
         }
 
-        # Run setup script
+        # Run setup script (will use precompiled libraries for speed)
         echo "Running Lupine Engine setup script..."
-        python setup_build_environment.py --force
+        python setup_build_environment.py
 
         # Verify setup
         echo "Verifying setup..."
@@ -155,9 +155,9 @@ jobs:
         # Set up Qt environment
         echo "$(brew --prefix qt6)/bin" >> $GITHUB_PATH
 
-        # Run setup script
+        # Run setup script (will use precompiled libraries for speed)
         echo "Running Lupine Engine setup script..."
-        python3 setup_build_environment.py --force
+        python3 setup_build_environment.py
 
         # Verify setup
         echo "Verifying setup..."
@@ -311,7 +311,7 @@ jobs:
       shell: bash
 
     - name: Upload build artifacts
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       if: always()
       with:
         name: lupine-engine-${{ matrix.platform }}-${{ matrix.triplet }}
@@ -321,7 +321,7 @@ jobs:
         retention-days: 7
 
     - name: Upload logs on failure
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       if: failure()
       with:
         name: build-logs-${{ matrix.platform }}-${{ matrix.triplet }}
