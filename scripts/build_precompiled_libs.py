@@ -223,7 +223,7 @@ def main():
     parser.add_argument("--platform", choices=["Windows", "Linux", "Mac-OSX", "Mac-ARM64"], 
                        help="Build package for specific platform only")
     parser.add_argument("--upload", action="store_true", help="Upload to GitHub releases")
-    parser.add_argument("--repo", default="your-org/lupine-precompiled-libs", 
+    parser.add_argument("--repo", default="Kurokamori/lupine-game-engine",
                        help="GitHub repository for uploads")
     parser.add_argument("--tag", default=f"v{datetime.datetime.now().strftime('%Y%m%d')}", 
                        help="Release tag")

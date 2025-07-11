@@ -29,6 +29,9 @@ import tarfile
 import zipfile
 import json
 import argparse
+import datetime
+import concurrent.futures
+import threading
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
@@ -37,7 +40,12 @@ class BuildEnvironmentSetup:
         self.force = force
         self.no_qt = no_qt
         self.dev_only = dev_only
-        self.root_dir = Path(__file__).parent.absolute()
+        # If script is in scripts/ directory, go up one level to repository root
+        script_dir = Path(__file__).parent.absolute()
+        if script_dir.name == "scripts":
+            self.root_dir = script_dir.parent
+        else:
+            self.root_dir = script_dir
         self.thirdparty_dir = self.root_dir / "thirdparty"
         self.system_info = self._detect_system()
         
@@ -151,51 +159,50 @@ class BuildEnvironmentSetup:
             self._run_command(['git', 'clone', 'https://github.com/Microsoft/vcpkg.git', str(vcpkg_dir)])
             self._run_command([str(vcpkg_dir / "bootstrap-vcpkg.bat")])
 
-        # Install dependencies via vcpkg
+        # Check if precompiled libraries are available
+        # Update this URL to point to your actual GitHub repository
+        precompiled_url = "https://github.com/Kurokamori/lupine-game-engine/releases/latest/download"
+        precompiled_archive = f"lupine-libs-{triplet}.zip"
+        precompiled_path = self.thirdparty_dir / precompiled_archive
+
+        if self._download_precompiled_libraries(precompiled_url, precompiled_archive, precompiled_path):
+            print("Using precompiled libraries - setup complete!")
+            return
+
+        print("Precompiled libraries not available, building from source...")
+
+        # Install dependencies via vcpkg with optimizations
         vcpkg_exe = vcpkg_dir / "vcpkg.exe"
         triplet = self.system_info['triplet']
 
-        # Core dependencies
-        core_dependencies = [
+        # Enable binary caching for faster builds
+        self._setup_vcpkg_binary_caching(vcpkg_dir)
+
+        # Minimal core dependencies for faster setup
+        essential_dependencies = [
             'sdl2', 'sdl2-image', 'sdl2-ttf', 'sdl2-mixer',
             'glad', 'glm', 'assimp', 'bullet3', 'box2d',
             'lua', 'yaml-cpp', 'spdlog', 'nlohmann-json',
-            'libpng', 'libjpeg-turbo', 'freetype', 'zlib',
-            'openssl', 'sqlite3', 'pugixml'
+            'libpng', 'zlib', 'openssl'
         ]
-
-        # Audio dependencies
-        audio_dependencies = [
-            'libogg', 'libvorbis', 'libflac', 'opus',
-            'mpg123', 'libsndfile', 'wavpack'
-        ]
-
-        # Compression dependencies
-        compression_dependencies = [
-            'bzip2', 'liblzma', 'lz4', 'zstd', 'brotli'
-        ]
-
-        # Python dependencies
-        python_dependencies = ['python3', 'pybind11']
-
-        all_dependencies = core_dependencies + audio_dependencies + compression_dependencies + python_dependencies
 
         if not self.no_qt:
-            all_dependencies.extend(['qtbase'])
+            essential_dependencies.append('qtbase')
 
-        # Install dependencies in batches to handle potential failures
-        failed_deps = []
-        for dep in all_dependencies:
-            print(f"Installing {dep}...")
-            try:
-                self._run_command([str(vcpkg_exe), 'install', f'{dep}:{triplet}'])
-            except:
-                print(f"Warning: Failed to install {dep}, continuing...")
-                failed_deps.append(dep)
+        # Install essential dependencies in parallel
+        print("Installing essential dependencies...")
+        self._install_vcpkg_packages_parallel(vcpkg_exe, essential_dependencies, triplet)
 
-        if failed_deps:
-            print(f"Warning: The following dependencies failed to install: {', '.join(failed_deps)}")
-            print("You may need to install these manually or the build may fail.")
+        # Optional dependencies (install in background or skip if time is critical)
+        optional_dependencies = [
+            'libjpeg-turbo', 'freetype', 'sqlite3', 'pugixml',
+            'libogg', 'libvorbis', 'libflac', 'opus', 'mpg123',
+            'bzip2', 'liblzma', 'lz4', 'zstd'
+        ]
+
+        if not self.dev_only:
+            print("Installing optional dependencies...")
+            self._install_vcpkg_packages_parallel(vcpkg_exe, optional_dependencies, triplet, ignore_failures=True)
 
         # Integrate vcpkg with Visual Studio
         print("Integrating vcpkg with Visual Studio...")
@@ -327,6 +334,159 @@ class BuildEnvironmentSetup:
                 self._run_command(['python3', '-m', 'pip', 'install', '--user', package])
             except:
                 print(f"Warning: Failed to install Python package {package}")
+
+    def _download_precompiled_libraries(self, base_url: str, archive_name: str, local_path: Path) -> bool:
+        """Download and extract precompiled libraries if available."""
+        try:
+            import urllib.request
+            import zipfile
+
+            download_url = f"{base_url}/{archive_name}"
+            print(f"Checking for precompiled libraries at {download_url}...")
+
+            # Try to download the precompiled archive
+            urllib.request.urlretrieve(download_url, local_path)
+
+            # Extract to thirdparty directory
+            with zipfile.ZipFile(local_path, 'r') as zip_ref:
+                zip_ref.extractall(self.thirdparty_dir)
+
+            # Clean up downloaded archive
+            local_path.unlink()
+
+            print("✅ Precompiled libraries downloaded and extracted successfully!")
+            return True
+
+        except Exception as e:
+            print(f"Precompiled libraries not available: {e}")
+            return False
+
+    def _setup_vcpkg_binary_caching(self, vcpkg_dir: Path):
+        """Set up vcpkg binary caching for faster builds."""
+        try:
+            # Create binary cache directory
+            cache_dir = vcpkg_dir / "bincache"
+            cache_dir.mkdir(exist_ok=True)
+
+            # Set environment variable for binary caching
+            import os
+            os.environ['VCPKG_BINARY_SOURCES'] = f"clear;files,{cache_dir},readwrite"
+
+            print(f"Binary caching enabled at {cache_dir}")
+        except Exception as e:
+            print(f"Warning: Could not set up binary caching: {e}")
+
+    def _install_vcpkg_packages_parallel(self, vcpkg_exe: Path, packages: list, triplet: str, ignore_failures: bool = False):
+        """Install vcpkg packages with parallel processing."""
+        import concurrent.futures
+        import threading
+
+        def install_package(package):
+            try:
+                cmd = [str(vcpkg_exe), 'install', f'{package}:{triplet}']
+                result = self._run_command(cmd, capture=True)
+                return package, True, result
+            except Exception as e:
+                return package, False, str(e)
+
+        # Use thread pool for parallel installation
+        max_workers = min(4, len(packages))  # Limit to 4 parallel jobs to avoid overwhelming the system
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+            # Submit all package installations
+            future_to_package = {executor.submit(install_package, pkg): pkg for pkg in packages}
+
+            # Process results as they complete
+            for future in concurrent.futures.as_completed(future_to_package):
+                package, success, result = future.result()
+
+                if success:
+                    print(f"✅ {package} installed successfully")
+                else:
+                    if ignore_failures:
+                        print(f"⚠️  {package} failed to install (optional): {result}")
+                    else:
+                        print(f"❌ {package} failed to install: {result}")
+
+    def setup_cross_compilation_libraries(self):
+        """Set up libraries for all target platforms to enable cross-compilation."""
+        print("Setting up cross-compilation libraries...")
+
+        # Define all target platforms
+        target_platforms = {
+            "Windows": "x64-windows-static",
+            "Linux": "x64-linux",
+            "Mac-OSX": "x64-osx",
+            "Mac-ARM64": "arm64-osx"
+        }
+
+        # Try to download precompiled libraries for each platform
+        for platform, triplet in target_platforms.items():
+            platform_dir = self.thirdparty_dir / platform
+            platform_dir.mkdir(exist_ok=True)
+
+            # Check if we already have libraries for this platform
+            if self._platform_libraries_exist(platform_dir):
+                print(f"✅ {platform} libraries already available")
+                continue
+
+            # Try to download precompiled libraries
+            precompiled_url = "https://github.com/Kurokamori/lupine-game-engine/releases/latest/download"
+            archive_name = f"lupine-libs-{triplet}.zip"
+            local_path = self.thirdparty_dir / archive_name
+
+            if self._download_precompiled_libraries(precompiled_url, archive_name, local_path):
+                print(f"✅ {platform} precompiled libraries downloaded")
+            else:
+                print(f"⚠️  {platform} precompiled libraries not available")
+                # Could add logic here to build from source for other platforms
+
+        # Create cross-compilation manifest
+        self._create_cross_compilation_manifest()
+
+    def _platform_libraries_exist(self, platform_dir: Path) -> bool:
+        """Check if platform libraries already exist."""
+        lib_dir = platform_dir / "lib"
+        if not lib_dir.exists():
+            return False
+
+        # Check for essential libraries
+        essential_libs = ["SDL2", "glad", "lua", "yaml-cpp"]
+        for lib in essential_libs:
+            lib_files = list(lib_dir.glob(f"*{lib}*"))
+            if not lib_files:
+                return False
+
+        return True
+
+    def _create_cross_compilation_manifest(self):
+        """Create a manifest file describing available cross-compilation targets."""
+        manifest = {
+            "version": "1.0",
+            "generated": str(datetime.datetime.now()),
+            "platforms": {}
+        }
+
+        for platform_dir in self.thirdparty_dir.iterdir():
+            if platform_dir.is_dir() and platform_dir.name in ["Windows", "Linux", "Mac-OSX", "Mac-ARM64"]:
+                lib_dir = platform_dir / "lib"
+                if lib_dir.exists():
+                    lib_files = [f.name for f in lib_dir.iterdir() if f.is_file()]
+                    manifest["platforms"][platform_dir.name] = {
+                        "available": True,
+                        "library_count": len(lib_files),
+                        "path": str(platform_dir)
+                    }
+                else:
+                    manifest["platforms"][platform_dir.name] = {
+                        "available": False,
+                        "library_count": 0,
+                        "path": str(platform_dir)
+                    }
+
+        manifest_file = self.thirdparty_dir / "cross_compilation_manifest.json"
+        manifest_file.write_text(json.dumps(manifest, indent=2))
+        print(f"Cross-compilation manifest created: {manifest_file}")
 
     def setup_qt(self):
         """Set up Qt for the current platform."""
@@ -687,7 +847,7 @@ message(STATUS "Third-party Directory: ${THIRDPARTY_DIR}")
         ]
 
         if self.system_info['system'] == 'windows':
-            cmake_args.extend(['-G', 'Visual Studio 16 2019', '-A', 'x64'])
+            cmake_args.extend(['-G', 'Visual Studio 17 2022', '-A', 'x64'])
             # Add vcpkg toolchain
             vcpkg_toolchain = self.thirdparty_dir / "vcpkg" / "scripts" / "buildsystems" / "vcpkg.cmake"
             if vcpkg_toolchain.exists():
@@ -720,7 +880,7 @@ message(STATUS "Third-party Directory: ${THIRDPARTY_DIR}")
 REM Auto-generated build script for Lupine Engine
 echo Building Lupine Engine for Windows...
 
-cmake -B build -S . -G "Visual Studio 16 2019" -A x64 ^
+cmake -B build -S . -G "Visual Studio 17 2022" -A x64 ^
     -DCMAKE_TOOLCHAIN_FILE=thirdparty/vcpkg/scripts/buildsystems/vcpkg.cmake ^
     -DVCPKG_TARGET_TRIPLET={self.system_info['triplet']} ^
     -DCMAKE_BUILD_TYPE=Release
@@ -800,7 +960,7 @@ def main():
         setup.install_system_dependencies()
         setup.setup_qt()
         setup.setup_emscripten()
-        setup.setup_cross_platform_libraries()
+        setup.setup_cross_compilation_libraries()  # Always set up cross-compilation
         setup.generate_cmake_config()
         setup.create_build_scripts()
 
