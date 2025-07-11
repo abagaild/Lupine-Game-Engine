@@ -4,17 +4,17 @@
 
 <p align=center>Created by Kurokamori</p>
 
-## ! Warning ! This engine in it's current state exists as a TECHNICAL PREVIEW not a fully functional editor. 
+## ! Warning ! This engine in its current state exists as a TECHNICAL PREVIEW, not a fully functional editor. 
 What does this mean? </br></br>
-This means that the editor is fundementally not ready for complete game development yet, and is being made public in its current state to prove and share a concept, similar to a game's 'vertical slice' it exists as a concept and a chance to try something new, not a feature complete tool. </br></br>
+This means that the editor is fundamentally not ready for complete game development yet, and is being made public in its current state to prove and share a concept, similar to a game's 'vertical slice' it exists as a concept and a chance to try something new, not a feature-complete tool. </br></br>
 What's the point?</br></br>
-The point is three fold, I want to share what I'm creating, I want early feedback on how features feel, and I want others to be able to test the software and get a feel for the expierence.</br></br>
+The point is threefold, I want to share what I'm creating, I want early feedback on how features feel, and I want others to be able to test the software and get a feel for the expierence.</br></br>
 How do I try it out?</br></br>
 Navigate to the `Release` section and select the latest release.</br> (Currently only available on windows, but linux support coming soon and mac support is planned)</br>
 
 ## 2D and 3D Cross Platform Game Engine
 This editor aims to be a feature packed 2D and 3D environment with powerful and intuitive tooling and an easy to use interface, which allows for the seemless creation of a wide variety of video games, with a focus on accelerating prototyping and removing some of the frictio of early developmet, allowing you to focus on what makes your game unique as quickly as possible. </br>
-Though not currently supported the infrastructure exists for eventual export to Linux, Windows (implemented), and Mac, as well as eventual support for Web, and (possibly) console.
+Though not currently supported, the infrastructure exists for eventual export to Linux, Windows (implemented), and Mac, as well as eventual support for Web, and (possibly) console.
 
 ## Free and Open Source
 I believe all tools should be free -- so I'm putting it into practice. Lupine Engine is 100% free to download and use, no royalties, no premium features, no caveats. </br>
@@ -27,7 +27,7 @@ Engine Provided under the MIT Permissive License
 
 ## Installation Instructions
 Windows </br>
-Installing for windows is as simple as downloading the editor and runtime executables and launching `lupine-editor.exe`. (Please make sure that the two executables remain siblings of eachother (in the same folder) otherwise the editor will not be able to launch the runtime execution)
+Installing for windows is as simple as downloading the editor and runtime executables and launching `lupine-editor.exe`. (Please make sure that the two executables remain siblings of each other (in the same folder) otherwise the editor will not be able to launch the runtime execution)
 </br></br>
 Linux </br>
 Coming soon. (will be available as .deb package and hopefully others in the coming months)
