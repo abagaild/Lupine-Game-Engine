@@ -9,6 +9,7 @@ on:
 jobs:
   build:
     runs-on: ${{ matrix.os }}
+
     strategy:
       fail-fast: false
       matrix:
@@ -44,25 +45,22 @@ jobs:
         run: echo "BUILD_DIR=${{ github.workspace }}/build" >> $GITHUB_ENV
         shell: bash
 
-      - name: Configure CMake (macOS universal)
-        if: matrix.os == 'macos-latest'
+      # <––– NEW: on Windows only, add your Qt6 static build's bin folder to PATH 
+      - name: Add Qt tools to PATH (Windows)
+        if: matrix.os == 'windows-latest'
         run: |
-          cmake -S . -B "$BUILD_DIR" \
-            -DCMAKE_C_COMPILER=${{ matrix.c_compiler }} \
-            -DCMAKE_CXX_COMPILER=${{ matrix.cpp_compiler }} \
-            -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
-            -DCMAKE_OSX_ARCHITECTURES="x86_64;arm64" \
-            -DTHIRDPARTY_DIR="${{ github.workspace }}/thirdparty"
+          echo "${{ github.workspace }}/thirdparty/Windows/qtbase_x64-windows-static/bin" >> $GITHUB_PATH
         shell: bash
 
-      - name: Configure CMake (Windows & Linux)
-        if: matrix.os != 'macos-latest'
+      - name: Configure CMake (Windows & Linux & macOS)
         run: |
           cmake -S . -B "$BUILD_DIR" \
             -DCMAKE_C_COMPILER=${{ matrix.c_compiler }} \
             -DCMAKE_CXX_COMPILER=${{ matrix.cpp_compiler }} \
             -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
-            -DTHIRDPARTY_DIR="${{ github.workspace }}/thirdparty"
+            -DTHIRDPARTY_DIR="${{ github.workspace }}/thirdparty" \
+            $([[ "${{ matrix.os }}" == "windows-latest" ]] && echo "-DCMAKE_PREFIX_PATH=${{ github.workspace }}/thirdparty/Windows/qtbase_x64-windows-static") \
+            $([[ "${{ matrix.os }}" == "macos-latest" ]] && echo "-DCMAKE_OSX_ARCHITECTURES=\"x86_64;arm64\"")
         shell: bash
 
       - name: Build
