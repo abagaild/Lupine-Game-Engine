@@ -1,50 +1,58 @@
-name: Build and Test Lupine Engine
+name: Build Precompiled Libraries
 
 on:
-  push:
-    branches: [ main, develop ]
-  pull_request:
-    branches: [ main, develop ]
   workflow_dispatch:
+    inputs:
+      create_release:
+        description: 'Create GitHub release'
+        required: true
+        default: true
+        type: boolean
+      release_tag:
+        description: 'Release tag'
+        required: false
+        default: ''
+  schedule:
+    # Build weekly on Sundays at 2 AM UTC
+    - cron: '0 2 * * 0'
+  push:
+    paths:
+      - 'setup_build_environment.py'
+      - 'scripts/build_precompiled_libs.py'
+      - '.github/workflows/build-precompiled-libs.yml'
 
 jobs:
-  build-and-test:
+  build-libraries:
     strategy:
       fail-fast: false
       matrix:
         include:
           - name: "Windows x64"
             os: windows-latest
-            platform: windows
+            platform: Windows
             triplet: x64-windows-static
-            build_type: Release
             
           - name: "Linux x64"
             os: ubuntu-latest
-            platform: linux
+            platform: Linux
             triplet: x64-linux
-            build_type: Release
             
           - name: "macOS x64"
             os: macos-13
-            platform: macos
+            platform: Mac-OSX
             triplet: x64-osx
-            build_type: Release
             
           - name: "macOS ARM64"
             os: macos-latest
-            platform: macos
+            platform: Mac-ARM64
             triplet: arm64-osx
-            build_type: Release
 
     runs-on: ${{ matrix.os }}
-    name: ${{ matrix.name }}
+    name: Build ${{ matrix.name }}
     
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
-      with:
-        submodules: recursive
 
     - name: Setup Python
       uses: actions/setup-python@v5
@@ -59,314 +67,205 @@ jobs:
           ~/.cache/pip
           ~/vcpkg
           /usr/local/Homebrew
-        key: ${{ runner.os }}-${{ matrix.triplet }}-deps-${{ hashFiles('scripts/setup_build_environment.py') }}
+        key: precompiled-${{ runner.os }}-${{ matrix.triplet }}-${{ hashFiles('scripts/setup_build_environment.py') }}
         restore-keys: |
-          ${{ runner.os }}-${{ matrix.triplet }}-deps-
-          ${{ runner.os }}-deps-
+          precompiled-${{ runner.os }}-${{ matrix.triplet }}-
+          precompiled-${{ runner.os }}-
 
     - name: Install system dependencies (Windows)
-      if: matrix.platform == 'windows'
+      if: matrix.platform == 'Windows'
       run: |
-        # Install Chocolatey packages
         choco install cmake git ninja -y
-
-        # Ensure Visual Studio is available
-        Write-Host "Visual Studio installation check..."
-        if (Get-Command "cl.exe" -ErrorAction SilentlyContinue) {
-          Write-Host "✓ Visual Studio compiler found"
-        } else {
-          Write-Host "Installing Visual Studio Build Tools..."
-          choco install visualstudio2022buildtools --package-parameters "--add Microsoft.VisualStudio.Workload.VCTools --add Microsoft.VisualStudio.Component.VC.Tools.x86.x64 --add Microsoft.VisualStudio.Component.Windows10SDK.19041" -y
-        }
-
-        # Run setup script (will use precompiled libraries for speed)
-        Write-Host "Running Lupine Engine setup script..."
         Write-Host "Current directory: $(Get-Location)"
-        Write-Host "Files in directory: $(Get-ChildItem -Name)"
         if (Test-Path "scripts/setup_build_environment.py") {
-          python scripts/setup_build_environment.py
-
-          # Verify setup
-          Write-Host "Verifying setup..."
-          python scripts/setup_build_environment.py --verify-only
+          python scripts/setup_build_environment.py --force --no-qt
         } else {
           Write-Host "❌ scripts/setup_build_environment.py not found!"
-          Write-Host "Available files:"
           Get-ChildItem -Recurse -Name "*.py"
           exit 1
         }
       shell: powershell
 
     - name: Install system dependencies (Linux)
-      if: matrix.platform == 'linux'
+      if: matrix.platform == 'Linux'
       run: |
-        echo "=== Installing Linux Dependencies ==="
         sudo apt-get update
-
-        # Install build essentials
-        sudo apt-get install -y build-essential cmake ninja-build pkg-config git
-
-        # Install development libraries
-        sudo apt-get install -y \
-          libsdl2-dev libsdl2-image-dev libsdl2-ttf-dev libsdl2-mixer-dev \
-          libassimp-dev libbullet-dev liblua5.4-dev libyaml-cpp-dev \
-          libspdlog-dev libpng-dev libjpeg-dev libfreetype-dev \
-          zlib1g-dev libssl-dev libsqlite3-dev \
-          libogg-dev libvorbis-dev libflac-dev libopus-dev \
-          libx11-dev libxext-dev libxrender-dev libgl1-mesa-dev \
-          libasound2-dev libpulse-dev
-
-        # Install Qt6 for editor
-        sudo apt-get install -y qt6-base-dev qt6-tools-dev qt6-tools-dev-tools
-
-        # Install virtual display for testing
-        sudo apt-get install -y xvfb
-
-        # Run setup script
-        echo "Running Lupine Engine setup script..."
-        python3 setup_build_environment.py --force
-
-        # Verify setup
-        echo "Verifying setup..."
-        python3 setup_build_environment.py --verify-only
-        
-    - name: Install system dependencies (macOS)
-      if: matrix.platform == 'macos'
-      run: |
-        echo "=== Installing macOS Dependencies ==="
-
-        # Ensure Xcode Command Line Tools are installed
-        if ! xcode-select -p &> /dev/null; then
-          echo "Installing Xcode Command Line Tools..."
-          sudo xcode-select --install || true
-          # Wait for installation to complete
-          until xcode-select -p &> /dev/null; do
-            sleep 5
-          done
-        fi
-
-        # Update Homebrew
-        brew update
-
-        # Install core dependencies
-        brew install cmake ninja pkg-config python3
-
-        # Install development libraries
-        brew install \
-          sdl2 sdl2_image sdl2_ttf sdl2_mixer \
-          assimp bullet lua yaml-cpp spdlog \
-          libpng jpeg freetype zlib openssl \
-          libogg libvorbis flac opus mpg123 libsndfile
-
-        # Install Qt6 for editor
-        brew install qt6
-
-        # Set up Qt environment
-        echo "$(brew --prefix qt6)/bin" >> $GITHUB_PATH
-
-        # Run setup script (will use precompiled libraries for speed)
-        echo "Running Lupine Engine setup script..."
-        echo "Current directory: $(pwd)"
-        echo "Files in directory: $(ls -la)"
+        sudo apt-get install -y build-essential cmake ninja-build pkg-config
         if [ -f "scripts/setup_build_environment.py" ]; then
-          python3 scripts/setup_build_environment.py
-
-          # Verify setup
-          echo "Verifying setup..."
-          python3 scripts/setup_build_environment.py --verify-only
+          python3 scripts/setup_build_environment.py --force --no-qt
         else
           echo "❌ scripts/setup_build_environment.py not found!"
-          echo "Available Python files:"
           find . -name "*.py" -type f
           exit 1
         fi
 
-    - name: Configure CMake
+    - name: Install system dependencies (macOS)
+      if: matrix.platform == 'Mac-OSX' || matrix.platform == 'Mac-ARM64'
       run: |
-        echo "=== Configuring CMake ==="
-
-        # Platform-specific configuration
-        CMAKE_ARGS="-B build -S . -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} -DLUPINE_ENABLE_EDITOR=ON -DLUPINE_ENABLE_EXPORT=ON"
-
-        if [ "${{ matrix.platform }}" = "windows" ]; then
-          CMAKE_ARGS="$CMAKE_ARGS -G \"Visual Studio 17 2022\" -A x64"
-          # Add vcpkg toolchain if available
-          if [ -f "thirdparty/vcpkg/scripts/buildsystems/vcpkg.cmake" ]; then
-            CMAKE_ARGS="$CMAKE_ARGS -DCMAKE_TOOLCHAIN_FILE=thirdparty/vcpkg/scripts/buildsystems/vcpkg.cmake"
-            CMAKE_ARGS="$CMAKE_ARGS -DVCPKG_TARGET_TRIPLET=${{ matrix.triplet }}"
-          fi
-        elif [ "${{ matrix.platform }}" = "macos" ]; then
-          if [ "${{ matrix.triplet }}" = "arm64-osx" ]; then
-            CMAKE_ARGS="$CMAKE_ARGS -DCMAKE_OSX_ARCHITECTURES=arm64"
-          else
-            CMAKE_ARGS="$CMAKE_ARGS -DCMAKE_OSX_ARCHITECTURES=x86_64"
-          fi
-          CMAKE_ARGS="$CMAKE_ARGS -DCMAKE_OSX_DEPLOYMENT_TARGET=10.15"
-        fi
-
-        # Add platform config if available
-        if [ -f "cmake/PlatformConfig.cmake" ]; then
-          CMAKE_ARGS="$CMAKE_ARGS -C cmake/PlatformConfig.cmake"
-        fi
-
-        echo "CMake command: cmake $CMAKE_ARGS"
-        eval "cmake $CMAKE_ARGS"
-      shell: bash
-
-    - name: Build
-      run: |
-        cmake --build build --config ${{ matrix.build_type }} --parallel
-      shell: bash
-      
-    - name: Verify build outputs
-      run: |
-        echo "=== Build Output Verification ==="
-        
-        if [ "${{ matrix.platform }}" = "windows" ]; then
-          EXE_EXT=".exe"
+        brew update
+        brew install cmake ninja pkg-config
+        if [ -f "scripts/setup_build_environment.py" ]; then
+          python3 scripts/setup_build_environment.py --force --no-qt
         else
-          EXE_EXT=""
-        fi
-        
-        # Check if runtime exists
-        if [ -f "build/bin/lupine-runtime${EXE_EXT}" ]; then
-          echo "✓ lupine-runtime found"
-          ls -la "build/bin/lupine-runtime${EXE_EXT}"
-        else
-          echo "✗ lupine-runtime not found"
+          echo "❌ scripts/setup_build_environment.py not found!"
+          find . -name "*.py" -type f
           exit 1
         fi
-        
-        # Check if editor exists
-        if [ -f "build/bin/lupine-editor${EXE_EXT}" ]; then
-          echo "✓ lupine-editor found"
-          ls -la "build/bin/lupine-editor${EXE_EXT}"
+
+    - name: Build precompiled libraries
+      run: |
+        echo "Current directory: $(pwd)"
+        echo "Available Python files:"
+        find . -name "*.py" -type f
+        if [ -f "scripts/build_precompiled_libs.py" ]; then
+          python3 scripts/build_precompiled_libs.py --platform ${{ matrix.platform }}
         else
-          echo "✗ lupine-editor not found"
+          echo "❌ scripts/build_precompiled_libs.py not found!"
           exit 1
         fi
-        
-        echo "=== All executables found ==="
       shell: bash
 
-    - name: Test runtime execution
-      timeout-minutes: 1
-      run: |
-        echo "=== Testing Runtime Execution ==="
-
-        if [ "${{ matrix.platform }}" = "windows" ]; then
-          EXE_EXT=".exe"
-          TIMEOUT_CMD="timeout"
-        else
-          EXE_EXT=""
-          TIMEOUT_CMD="timeout"
-        fi
-
-        # Make executable on Unix systems
-        if [ "${{ matrix.platform }}" != "windows" ]; then
-          chmod +x "./build/bin/lupine-runtime${EXE_EXT}"
-        fi
-
-        # Test runtime with timeout - try different approaches
-        echo "Testing runtime executable..."
-
-        # First try with --help flag
-        if $TIMEOUT_CMD 25s ./build/bin/lupine-runtime${EXE_EXT} --help 2>/dev/null; then
-          echo "✓ Runtime responds to --help"
-        elif $TIMEOUT_CMD 25s ./build/bin/lupine-runtime${EXE_EXT} --version 2>/dev/null; then
-          echo "✓ Runtime responds to --version"
-        else
-          echo "⚠ Runtime doesn't respond to standard flags, testing basic execution..."
-          # Just try to run it briefly
-          $TIMEOUT_CMD 25s ./build/bin/lupine-runtime${EXE_EXT} 2>/dev/null || echo "Runtime executed (may have exited normally)"
-        fi
-
-        echo "Runtime test completed"
-      shell: bash
-
-    - name: Test editor execution
-      timeout-minutes: 1
-      run: |
-        echo "=== Testing Editor Execution ==="
-
-        if [ "${{ matrix.platform }}" = "windows" ]; then
-          EXE_EXT=".exe"
-          TIMEOUT_CMD="timeout"
-        else
-          EXE_EXT=""
-          TIMEOUT_CMD="timeout"
-        fi
-
-        # Set up virtual display for Linux
-        if [ "${{ matrix.platform }}" = "linux" ]; then
-          echo "Setting up virtual display for Linux..."
-          export DISPLAY=:99
-          sudo Xvfb :99 -screen 0 1024x768x24 > /dev/null 2>&1 &
-          sleep 3
-          echo "Virtual display started"
-        fi
-
-        # Make executable on Unix systems
-        if [ "${{ matrix.platform }}" != "windows" ]; then
-          chmod +x "./build/bin/lupine-editor${EXE_EXT}"
-        fi
-
-        # Test editor with timeout
-        echo "Testing editor executable..."
-
-        # First try with --help flag
-        if $TIMEOUT_CMD 25s ./build/bin/lupine-editor${EXE_EXT} --help 2>/dev/null; then
-          echo "✓ Editor responds to --help"
-        elif $TIMEOUT_CMD 25s ./build/bin/lupine-editor${EXE_EXT} --version 2>/dev/null; then
-          echo "✓ Editor responds to --version"
-        else
-          echo "⚠ Editor doesn't respond to standard flags, testing basic execution..."
-          # Just try to run it briefly
-          $TIMEOUT_CMD 25s ./build/bin/lupine-editor${EXE_EXT} 2>/dev/null || echo "Editor executed (may have exited normally)"
-        fi
-
-        echo "Editor test completed"
-      shell: bash
-
-    - name: Upload build artifacts
+    - name: Upload platform artifacts
       uses: actions/upload-artifact@v4
-      if: always()
       with:
-        name: lupine-engine-${{ matrix.platform }}-${{ matrix.triplet }}
+        name: precompiled-libs-${{ matrix.triplet }}
         path: |
-          build/bin/
-          build/lib/
-        retention-days: 7
+          precompiled_packages/lupine-libs-${{ matrix.triplet }}.zip
+          precompiled_packages/lupine-libs-${{ matrix.triplet }}.json
+        retention-days: 30
 
-    - name: Upload logs on failure
-      uses: actions/upload-artifact@v4
-      if: failure()
-      with:
-        name: build-logs-${{ matrix.platform }}-${{ matrix.triplet }}
-        path: |
-          build/CMakeFiles/CMakeOutput.log
-          build/CMakeFiles/CMakeError.log
-          build/**/*.log
-        retention-days: 3
-
-  # Summary job that depends on all build jobs
-  build-summary:
-    needs: build-and-test
+  create-release:
+    needs: build-libraries
     runs-on: ubuntu-latest
-    if: always()
+    if: github.event.inputs.create_release == 'true' || github.event_name == 'schedule'
     
     steps:
-    - name: Build Summary
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Download all artifacts
+      uses: actions/download-artifact@v4
+      with:
+        path: precompiled_packages
+        merge-multiple: true
+
+    - name: Flatten artifacts
       run: |
-        echo "=== Build Summary ==="
-        echo "Windows x64: ${{ needs.build-and-test.result }}"
-        echo "Linux x64: ${{ needs.build-and-test.result }}"
-        echo "macOS x64: ${{ needs.build-and-test.result }}"
-        echo "macOS ARM64: ${{ needs.build-and-test.result }}"
+        mkdir -p release_packages
+        # With v4, artifacts are already flattened when merge-multiple is true
+        find precompiled_packages -name "*.zip" -exec cp {} release_packages/ \;
+        find precompiled_packages -name "*.json" -exec cp {} release_packages/ \;
+        ls -la release_packages/
         
-        if [ "${{ needs.build-and-test.result }}" = "success" ]; then
-          echo "✅ All builds completed successfully!"
+    - name: Generate release tag
+      id: tag
+      run: |
+        if [ -n "${{ github.event.inputs.release_tag }}" ]; then
+          echo "tag=${{ github.event.inputs.release_tag }}" >> $GITHUB_OUTPUT
         else
-          echo "❌ Some builds failed. Check the individual job logs."
+          echo "tag=v$(date +'%Y%m%d')-$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+        fi
+        
+    - name: Create master manifest
+      run: |
+        python3 -c "
+        import json
+        import os
+        from datetime import datetime
+        from pathlib import Path
+        
+        packages_dir = Path('release_packages')
+        manifest = {
+            'version': '1.0.0',
+            'generated': datetime.now().isoformat(),
+            'tag': '${{ steps.tag.outputs.tag }}',
+            'packages': {}
+        }
+        
+        for json_file in packages_dir.glob('lupine-libs-*.json'):
+            with open(json_file) as f:
+                info = json.load(f)
+            
+            platform = info['platform']
+            triplet = info['triplet']
+            zip_file = f'lupine-libs-{triplet}.zip'
+            
+            if (packages_dir / zip_file).exists():
+                manifest['packages'][platform] = {
+                    'triplet': triplet,
+                    'package_file': zip_file,
+                    'info_file': json_file.name,
+                    'size_mb': info.get('total_size_mb', 0)
+                }
+        
+        with open('release_packages/manifest.json', 'w') as f:
+            json.dump(manifest, f, indent=2)
+        
+        print('Created manifest with platforms:', list(manifest['packages'].keys()))
+        "
+        
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: ${{ steps.tag.outputs.tag }}
+        name: Precompiled Libraries ${{ steps.tag.outputs.tag }}
+        body: |
+          ## Precompiled Static Libraries for Lupine Engine
+          
+          This release contains precompiled static libraries for fast setup across platforms.
+          
+          ### Available Platforms:
+          - Windows x64 (MSVC static)
+          - Linux x64 (GCC static)
+          - macOS x64 (Clang static)
+          - macOS ARM64 (Clang static)
+          
+          ### Usage:
+          1. Download the appropriate package for your platform
+          2. Extract to your `thirdparty/` directory
+          3. Run CMake configuration
+          
+          ### Automated Setup:
+          The `setup_build_environment.py` script will automatically download and extract these packages.
+          
+          Generated on: ${{ github.run_id }}
+          Commit: ${{ github.sha }}
+        files: |
+          release_packages/*.zip
+          release_packages/*.json
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  test-precompiled:
+    needs: create-release
+    strategy:
+      matrix:
+        os: [windows-latest, ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Setup Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+        
+    - name: Test precompiled library download
+      run: |
+        # Test that the setup script can download the precompiled libraries
+        if [ -f "scripts/setup_build_environment.py" ]; then
+          python3 scripts/setup_build_environment.py --verify-only
+        else
+          echo "❌ scripts/setup_build_environment.py not found!"
           exit 1
         fi
+      shell: bash
+      
+    - name: Test CMake configuration
+      run: |
+        cmake -B test_build -S . -DCMAKE_BUILD_TYPE=Release -DLUPINE_ENABLE_EDITOR=OFF
+      shell: bash
