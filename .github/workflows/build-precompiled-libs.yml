@@ -17,7 +17,7 @@ on:
     - cron: '0 2 * * 0'
   push:
     paths:
-      - 'setup_build_environment.py'
+      - 'scripts/setup_build_environment.py'
       - 'scripts/build_precompiled_libs.py'
       - '.github/workflows/build-precompiled-libs.yml'
 
@@ -78,7 +78,7 @@ jobs:
         choco install cmake git ninja -y
         Write-Host "Current directory: $(Get-Location)"
         if (Test-Path "scripts\setup_build_environment.py") {
-          python scripts\setup_build_environment.py --force --no-qt
+          python scripts\setup_build_environment.py --force --no-qt --dev-only
         } else {
           Write-Host "scripts\setup_build_environment.py not found!"
           Get-ChildItem -Recurse -Filter "*.py" | Select-Object -ExpandProperty Name
@@ -92,7 +92,7 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y build-essential cmake ninja-build pkg-config
         if [ -f "scripts/setup_build_environment.py" ]; then
-          python3 scripts/setup_build_environment.py --force --no-qt
+          python3 scripts/setup_build_environment.py --force --no-qt --dev-only
         else
           echo "❌ scripts/setup_build_environment.py not found!"
           find . -name "*.py" -type f
@@ -105,7 +105,7 @@ jobs:
         brew update
         brew install cmake ninja pkg-config
         if [ -f "scripts/setup_build_environment.py" ]; then
-          python3 scripts/setup_build_environment.py --force --no-qt
+          python3 scripts/setup_build_environment.py --force --no-qt --dev-only
         else
           echo "❌ scripts/setup_build_environment.py not found!"
           find . -name "*.py" -type f
@@ -267,5 +267,11 @@ jobs:
       
     - name: Test CMake configuration
       run: |
-        cmake -B test_build -S . -DCMAKE_BUILD_TYPE=Release -DLUPINE_ENABLE_EDITOR=OFF
+        # Add platform config if available
+        CMAKE_ARGS="-B test_build -S . -DCMAKE_BUILD_TYPE=Release -DLUPINE_ENABLE_EDITOR=OFF"
+        if [ -f "cmake/PlatformConfig.cmake" ]; then
+          CMAKE_ARGS="$CMAKE_ARGS -C cmake/PlatformConfig.cmake"
+        fi
+        echo "CMake command: cmake $CMAKE_ARGS"
+        eval "cmake $CMAKE_ARGS"
       shell: bash
