@@ -76,7 +76,13 @@ jobs:
       if: matrix.platform == 'Windows'
       run: |
         choco install cmake git ninja -y
-        python setup_build_environment.py --force --no-qt
+        Write-Host "Current directory: $(Get-Location)"
+        if (Test-Path "setup_build_environment.py") {
+          python setup_build_environment.py --force --no-qt
+        } else {
+          Write-Host "❌ setup_build_environment.py not found!"
+          exit 1
+        }
       shell: powershell
 
     - name: Install system dependencies (Linux)
