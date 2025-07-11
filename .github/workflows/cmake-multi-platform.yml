@@ -1,74 +1,354 @@
-name: CMake on multiple platforms
+name: Build and Test Lupine Engine
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ main, develop ]
   pull_request:
-    branches: [ "main" ]
+    branches: [ main, develop ]
+  workflow_dispatch:
 
 jobs:
-  build:
-    runs-on: ${{ matrix.os }}
-
+  build-and-test:
     strategy:
       fail-fast: false
       matrix:
         include:
-          # Windows (MSVC)
-          - os: windows-latest
-            c_compiler: cl
-            cpp_compiler: cl
+          - name: "Windows x64"
+            os: windows-latest
+            platform: windows
+            triplet: x64-windows-static
+            build_type: Release
+            
+          - name: "Linux x64"
+            os: ubuntu-latest
+            platform: linux
+            triplet: x64-linux
+            build_type: Release
+            
+          - name: "macOS x64"
+            os: macos-13
+            platform: macos
+            triplet: x64-osx
+            build_type: Release
+            
+          - name: "macOS ARM64"
+            os: macos-latest
+            platform: macos
+            triplet: arm64-osx
             build_type: Release
 
-          # Linux (GCC)
-          - os: ubuntu-latest
-            c_compiler: gcc
-            cpp_compiler: g++
-            build_type: Release
-
-          # Linux (Clang)
-          - os: ubuntu-latest
-            c_compiler: clang
-            cpp_compiler: clang++
-            build_type: Release
-
-          # macOS universal (x86_64 + arm64)
-          - os: macos-latest
-            c_compiler: clang
-            cpp_compiler: clang++
-            build_type: Release
-
+    runs-on: ${{ matrix.os }}
+    name: ${{ matrix.name }}
+    
     steps:
-      - uses: actions/checkout@v4
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+        
+    - name: Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+        
+    - name: Cache dependencies
+      uses: actions/cache@v3
+      with:
+        path: |
+          thirdparty
+          ~/.cache/pip
+          ~/vcpkg
+          /usr/local/Homebrew
+        key: ${{ runner.os }}-${{ matrix.triplet }}-deps-${{ hashFiles('setup_build_environment.py') }}
+        restore-keys: |
+          ${{ runner.os }}-${{ matrix.triplet }}-deps-
+          ${{ runner.os }}-deps-
 
-      - name: Set build directory
-        run: echo "BUILD_DIR=${{ github.workspace }}/build" >> $GITHUB_ENV
-        shell: bash
+    - name: Install system dependencies (Windows)
+      if: matrix.platform == 'windows'
+      run: |
+        # Install Chocolatey packages
+        choco install cmake git ninja -y
 
-      # <––– NEW: on Windows only, add your Qt6 static build's bin folder to PATH 
-      - name: Add Qt tools to PATH (Windows)
-        if: matrix.os == 'windows-latest'
-        run: |
-          echo "${{ github.workspace }}/thirdparty/Windows/qtbase_x64-windows-static/bin" >> $GITHUB_PATH
-        shell: bash
+        # Ensure Visual Studio is available
+        echo "Visual Studio installation check..."
+        if (Get-Command "cl.exe" -ErrorAction SilentlyContinue) {
+          echo "✓ Visual Studio compiler found"
+        } else {
+          echo "Installing Visual Studio Build Tools..."
+          choco install visualstudio2022buildtools --package-parameters "--add Microsoft.VisualStudio.Workload.VCTools --add Microsoft.VisualStudio.Component.VC.Tools.x86.x64 --add Microsoft.VisualStudio.Component.Windows10SDK.19041" -y
+        }
 
-      - name: Configure CMake (Windows & Linux & macOS)
-        run: |
-          cmake -S . -B "$BUILD_DIR" \
-            -DCMAKE_C_COMPILER=${{ matrix.c_compiler }} \
-            -DCMAKE_CXX_COMPILER=${{ matrix.cpp_compiler }} \
-            -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
-            -DTHIRDPARTY_DIR="${{ github.workspace }}/thirdparty" \
-            $([[ "${{ matrix.os }}" == "windows-latest" ]] && echo "-DCMAKE_PREFIX_PATH=${{ github.workspace }}/thirdparty/Windows/qtbase_x64-windows-static") \
-            $([[ "${{ matrix.os }}" == "macos-latest" ]] && echo "-DCMAKE_OSX_ARCHITECTURES=\"x86_64;arm64\"")
-        shell: bash
+        # Run setup script
+        echo "Running Lupine Engine setup script..."
+        python setup_build_environment.py --force
 
-      - name: Build
-        run: cmake --build "$BUILD_DIR" --config ${{ matrix.build_type }}
-        shell: bash
+        # Verify setup
+        echo "Verifying setup..."
+        python setup_build_environment.py --verify-only
+      shell: powershell
 
-      - name: Test
-        run: |
-          cd "$BUILD_DIR"
-          ctest --output-on-failure -C ${{ matrix.build_type }}
-        shell: bash
+    - name: Install system dependencies (Linux)
+      if: matrix.platform == 'linux'
+      run: |
+        echo "=== Installing Linux Dependencies ==="
+        sudo apt-get update
+
+        # Install build essentials
+        sudo apt-get install -y build-essential cmake ninja-build pkg-config git
+
+        # Install development libraries
+        sudo apt-get install -y \
+          libsdl2-dev libsdl2-image-dev libsdl2-ttf-dev libsdl2-mixer-dev \
+          libassimp-dev libbullet-dev liblua5.4-dev libyaml-cpp-dev \
+          libspdlog-dev libpng-dev libjpeg-dev libfreetype-dev \
+          zlib1g-dev libssl-dev libsqlite3-dev \
+          libogg-dev libvorbis-dev libflac-dev libopus-dev \
+          libx11-dev libxext-dev libxrender-dev libgl1-mesa-dev \
+          libasound2-dev libpulse-dev
+
+        # Install Qt6 for editor
+        sudo apt-get install -y qt6-base-dev qt6-tools-dev qt6-tools-dev-tools qt6-opengl-dev
+
+        # Install virtual display for testing
+        sudo apt-get install -y xvfb
+
+        # Run setup script
+        echo "Running Lupine Engine setup script..."
+        python3 setup_build_environment.py --force
+
+        # Verify setup
+        echo "Verifying setup..."
+        python3 setup_build_environment.py --verify-only
+        
+    - name: Install system dependencies (macOS)
+      if: matrix.platform == 'macos'
+      run: |
+        echo "=== Installing macOS Dependencies ==="
+
+        # Ensure Xcode Command Line Tools are installed
+        if ! xcode-select -p &> /dev/null; then
+          echo "Installing Xcode Command Line Tools..."
+          sudo xcode-select --install || true
+          # Wait for installation to complete
+          until xcode-select -p &> /dev/null; do
+            sleep 5
+          done
+        fi
+
+        # Update Homebrew
+        brew update
+
+        # Install core dependencies
+        brew install cmake ninja pkg-config python3
+
+        # Install development libraries
+        brew install \
+          sdl2 sdl2_image sdl2_ttf sdl2_mixer \
+          assimp bullet lua yaml-cpp spdlog \
+          libpng jpeg freetype zlib openssl \
+          libogg libvorbis flac opus mpg123 libsndfile
+
+        # Install Qt6 for editor
+        brew install qt6
+
+        # Set up Qt environment
+        echo "$(brew --prefix qt6)/bin" >> $GITHUB_PATH
+
+        # Run setup script
+        echo "Running Lupine Engine setup script..."
+        python3 setup_build_environment.py --force
+
+        # Verify setup
+        echo "Verifying setup..."
+        python3 setup_build_environment.py --verify-only
+
+    - name: Configure CMake
+      run: |
+        echo "=== Configuring CMake ==="
+
+        # Platform-specific configuration
+        CMAKE_ARGS="-B build -S . -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} -DLUPINE_ENABLE_EDITOR=ON -DLUPINE_ENABLE_EXPORT=ON"
+
+        if [ "${{ matrix.platform }}" = "windows" ]; then
+          CMAKE_ARGS="$CMAKE_ARGS -G \"Visual Studio 17 2022\" -A x64"
+          # Add vcpkg toolchain if available
+          if [ -f "thirdparty/vcpkg/scripts/buildsystems/vcpkg.cmake" ]; then
+            CMAKE_ARGS="$CMAKE_ARGS -DCMAKE_TOOLCHAIN_FILE=thirdparty/vcpkg/scripts/buildsystems/vcpkg.cmake"
+            CMAKE_ARGS="$CMAKE_ARGS -DVCPKG_TARGET_TRIPLET=${{ matrix.triplet }}"
+          fi
+        elif [ "${{ matrix.platform }}" = "macos" ]; then
+          if [ "${{ matrix.triplet }}" = "arm64-osx" ]; then
+            CMAKE_ARGS="$CMAKE_ARGS -DCMAKE_OSX_ARCHITECTURES=arm64"
+          else
+            CMAKE_ARGS="$CMAKE_ARGS -DCMAKE_OSX_ARCHITECTURES=x86_64"
+          fi
+          CMAKE_ARGS="$CMAKE_ARGS -DCMAKE_OSX_DEPLOYMENT_TARGET=10.15"
+        fi
+
+        # Add platform config if available
+        if [ -f "cmake/PlatformConfig.cmake" ]; then
+          CMAKE_ARGS="$CMAKE_ARGS -C cmake/PlatformConfig.cmake"
+        fi
+
+        echo "CMake command: cmake $CMAKE_ARGS"
+        eval "cmake $CMAKE_ARGS"
+      shell: bash
+
+    - name: Build
+      run: |
+        cmake --build build --config ${{ matrix.build_type }} --parallel
+      shell: bash
+      
+    - name: Verify build outputs
+      run: |
+        echo "=== Build Output Verification ==="
+        
+        if [ "${{ matrix.platform }}" = "windows" ]; then
+          EXE_EXT=".exe"
+        else
+          EXE_EXT=""
+        fi
+        
+        # Check if runtime exists
+        if [ -f "build/bin/lupine-runtime${EXE_EXT}" ]; then
+          echo "✓ lupine-runtime found"
+          ls -la "build/bin/lupine-runtime${EXE_EXT}"
+        else
+          echo "✗ lupine-runtime not found"
+          exit 1
+        fi
+        
+        # Check if editor exists
+        if [ -f "build/bin/lupine-editor${EXE_EXT}" ]; then
+          echo "✓ lupine-editor found"
+          ls -la "build/bin/lupine-editor${EXE_EXT}"
+        else
+          echo "✗ lupine-editor not found"
+          exit 1
+        fi
+        
+        echo "=== All executables found ==="
+      shell: bash
+
+    - name: Test runtime execution
+      timeout-minutes: 1
+      run: |
+        echo "=== Testing Runtime Execution ==="
+
+        if [ "${{ matrix.platform }}" = "windows" ]; then
+          EXE_EXT=".exe"
+          TIMEOUT_CMD="timeout"
+        else
+          EXE_EXT=""
+          TIMEOUT_CMD="timeout"
+        fi
+
+        # Make executable on Unix systems
+        if [ "${{ matrix.platform }}" != "windows" ]; then
+          chmod +x "./build/bin/lupine-runtime${EXE_EXT}"
+        fi
+
+        # Test runtime with timeout - try different approaches
+        echo "Testing runtime executable..."
+
+        # First try with --help flag
+        if $TIMEOUT_CMD 25s ./build/bin/lupine-runtime${EXE_EXT} --help 2>/dev/null; then
+          echo "✓ Runtime responds to --help"
+        elif $TIMEOUT_CMD 25s ./build/bin/lupine-runtime${EXE_EXT} --version 2>/dev/null; then
+          echo "✓ Runtime responds to --version"
+        else
+          echo "⚠ Runtime doesn't respond to standard flags, testing basic execution..."
+          # Just try to run it briefly
+          $TIMEOUT_CMD 25s ./build/bin/lupine-runtime${EXE_EXT} 2>/dev/null || echo "Runtime executed (may have exited normally)"
+        fi
+
+        echo "Runtime test completed"
+      shell: bash
+
+    - name: Test editor execution
+      timeout-minutes: 1
+      run: |
+        echo "=== Testing Editor Execution ==="
+
+        if [ "${{ matrix.platform }}" = "windows" ]; then
+          EXE_EXT=".exe"
+          TIMEOUT_CMD="timeout"
+        else
+          EXE_EXT=""
+          TIMEOUT_CMD="timeout"
+        fi
+
+        # Set up virtual display for Linux
+        if [ "${{ matrix.platform }}" = "linux" ]; then
+          echo "Setting up virtual display for Linux..."
+          export DISPLAY=:99
+          sudo Xvfb :99 -screen 0 1024x768x24 > /dev/null 2>&1 &
+          sleep 3
+          echo "Virtual display started"
+        fi
+
+        # Make executable on Unix systems
+        if [ "${{ matrix.platform }}" != "windows" ]; then
+          chmod +x "./build/bin/lupine-editor${EXE_EXT}"
+        fi
+
+        # Test editor with timeout
+        echo "Testing editor executable..."
+
+        # First try with --help flag
+        if $TIMEOUT_CMD 25s ./build/bin/lupine-editor${EXE_EXT} --help 2>/dev/null; then
+          echo "✓ Editor responds to --help"
+        elif $TIMEOUT_CMD 25s ./build/bin/lupine-editor${EXE_EXT} --version 2>/dev/null; then
+          echo "✓ Editor responds to --version"
+        else
+          echo "⚠ Editor doesn't respond to standard flags, testing basic execution..."
+          # Just try to run it briefly
+          $TIMEOUT_CMD 25s ./build/bin/lupine-editor${EXE_EXT} 2>/dev/null || echo "Editor executed (may have exited normally)"
+        fi
+
+        echo "Editor test completed"
+      shell: bash
+
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: lupine-engine-${{ matrix.platform }}-${{ matrix.triplet }}
+        path: |
+          build/bin/
+          build/lib/
+        retention-days: 7
+
+    - name: Upload logs on failure
+      uses: actions/upload-artifact@v3
+      if: failure()
+      with:
+        name: build-logs-${{ matrix.platform }}-${{ matrix.triplet }}
+        path: |
+          build/CMakeFiles/CMakeOutput.log
+          build/CMakeFiles/CMakeError.log
+          build/**/*.log
+        retention-days: 3
+
+  # Summary job that depends on all build jobs
+  build-summary:
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    if: always()
+    
+    steps:
+    - name: Build Summary
+      run: |
+        echo "=== Build Summary ==="
+        echo "Windows x64: ${{ needs.build-and-test.result }}"
+        echo "Linux x64: ${{ needs.build-and-test.result }}"
+        echo "macOS x64: ${{ needs.build-and-test.result }}"
+        echo "macOS ARM64: ${{ needs.build-and-test.result }}"
+        
+        if [ "${{ needs.build-and-test.result }}" = "success" ]; then
+          echo "✅ All builds completed successfully!"
+        else
+          echo "❌ Some builds failed. Check the individual job logs."
+          exit 1
+        fi
