@@ -9,7 +9,6 @@ on:
 jobs:
   build:
     runs-on: ${{ matrix.os }}
-
     strategy:
       fail-fast: false
       matrix:
@@ -42,8 +41,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Set build directory
-        id: vars
-        run: echo "BUILD_DIR=${{ github.workspace }}/build" >> $GITHUB_OUTPUT
+        run: echo "BUILD_DIR=${{ github.workspace }}/build" >> $GITHUB_ENV
         shell: bash
 
       - name: Configure CMake (macOS universal)
@@ -72,6 +70,7 @@ jobs:
         shell: bash
 
       - name: Test
-        run: ctest --output-on-failure --build-config ${{ matrix.build_type }} -C ${{ matrix.build_type }}
-        working-directory: ${{ steps.vars.outputs.BUILD_DIR }}
+        run: |
+          cd "$BUILD_DIR"
+          ctest --output-on-failure -C ${{ matrix.build_type }}
         shell: bash
