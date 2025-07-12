@@ -405,37 +405,108 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 # Include Qt6 robust configuration functions
 include(FindQt6Robust)
 
-# Use our custom dependency finder
-find_package(LupineDependencies REQUIRED)
+# Modern CMake approach using vcpkg targets
+set(ENGINE_LIBRARIES)
 
-# Add GLM include directory if found
-if(GLM_FOUND AND GLM_INCLUDE_DIR)
-  target_include_directories(LupineEngine PRIVATE ${GLM_INCLUDE_DIR})
-  message(STATUS "Added GLM include directory: ${GLM_INCLUDE_DIR}")
-endif()
+# SDL2 Libraries
+find_package(SDL2 CONFIG REQUIRED)
+list(APPEND ENGINE_LIBRARIES SDL2::SDL2-static SDL2::SDL2main)
+message(STATUS "Found SDL2")
 
-# Add GLAD source or library
-set(GLAD_SOURCE_ADDED FALSE)
-if(WIN32 AND EXISTS "${PLATFORM_DIR}/glad_x64-windows-static/lib/glad.lib")
-  list(APPEND LupineDependencies_LIBRARIES "${PLATFORM_DIR}/glad_x64-windows-static/lib/glad.lib")
-  set(GLAD_SOURCE_ADDED TRUE)
-elseif(EXISTS "${THIRDPARTY_DIR}/glad/src/glad.c")
-  # GLAD source will be added to ENGINE_SOURCES
-  set(GLAD_SOURCE_ADDED TRUE)
-endif()
+find_package(SDL2_image CONFIG REQUIRED)
+list(APPEND ENGINE_LIBRARIES SDL2_image::SDL2_image-static)
+message(STATUS "Found SDL2_image")
 
-if(NOT GLAD_SOURCE_ADDED)
-  message(WARNING "GLAD source or library not found. OpenGL loading may not work.")
+find_package(SDL2_ttf CONFIG REQUIRED)
+list(APPEND ENGINE_LIBRARIES SDL2_ttf::SDL2_ttf-static)
+message(STATUS "Found SDL2_ttf")
+
+find_package(SDL2_mixer CONFIG REQUIRED)
+list(APPEND ENGINE_LIBRARIES SDL2_mixer::SDL2_mixer-static)
+message(STATUS "Found SDL2_mixer")
+
+# Graphics Libraries
+find_package(glad CONFIG REQUIRED)
+list(APPEND ENGINE_LIBRARIES glad::glad)
+message(STATUS "Found glad")
+
+find_package(glm CONFIG REQUIRED)
+target_link_libraries(LupineEngine PRIVATE glm::glm)
+message(STATUS "Found glm")
+
+# Physics Libraries
+find_package(Bullet CONFIG REQUIRED)
+list(APPEND ENGINE_LIBRARIES ${BULLET_LIBRARIES})
+message(STATUS "Found Bullet Physics")
+
+find_package(box2d CONFIG REQUIRED)
+list(APPEND ENGINE_LIBRARIES box2d::box2d)
+message(STATUS "Found Box2D")
+
+# Audio Libraries
+find_package(Vorbis CONFIG REQUIRED)
+list(APPEND ENGINE_LIBRARIES Vorbis::vorbis Vorbis::vorbisfile)
+message(STATUS "Found Vorbis")
+
+find_package(FLAC CONFIG REQUIRED)
+list(APPEND ENGINE_LIBRARIES FLAC::FLAC)
+message(STATUS "Found FLAC")
+
+
+
+# Utility Libraries
+find_package(yaml-cpp CONFIG REQUIRED)
+list(APPEND ENGINE_LIBRARIES yaml-cpp::yaml-cpp)
+message(STATUS "Found yaml-cpp")
+
+find_package(spdlog CONFIG REQUIRED)
+list(APPEND ENGINE_LIBRARIES spdlog::spdlog)
+message(STATUS "Found spdlog")
+
+find_package(pugixml CONFIG REQUIRED)
+list(APPEND ENGINE_LIBRARIES pugixml::pugixml)
+message(STATUS "Found pugixml")
+
+find_package(nlohmann_json CONFIG REQUIRED)
+target_link_libraries(LupineEngine PRIVATE nlohmann_json::nlohmann_json)
+message(STATUS "Found nlohmann_json")
+
+# 3D Model Libraries
+find_package(assimp CONFIG REQUIRED)
+list(APPEND ENGINE_LIBRARIES assimp::assimp)
+message(STATUS "Found assimp")
+
+# Scripting Libraries
+find_package(unofficial-lua CONFIG REQUIRED)
+list(APPEND ENGINE_LIBRARIES lua)
+message(STATUS "Found Lua")
+
+# Additional dependencies for static linking
+if(WIN32)
+    # Add bzip2 library for FreeType dependency
+    find_library(BZIP2_LIB NAMES bz2 PATHS "${PLATFORM_DIR}/bzip2_x64-windows-static/lib" NO_DEFAULT_PATH)
+    if(BZIP2_LIB)
+        list(APPEND ENGINE_LIBRARIES ${BZIP2_LIB})
+        message(STATUS "Found BZip2: ${BZIP2_LIB}")
+
+        # Add library directory to linker search path
+        target_link_directories(LupineEngine PRIVATE "${PLATFORM_DIR}/bzip2_x64-windows-static/lib")
+    endif()
 endif()
 
 # Use the collected libraries
-set(ENGINE_LIBRARIES ${LupineDependencies_LIBRARIES})
+set(ENGINE_LIBRARIES ${ENGINE_LIBRARIES})
 
 list(LENGTH ENGINE_LIBRARIES lib_count)
 message(STATUS "Found ${lib_count} engine libraries")
 
 #--- Link Engine Dependencies ---
 target_link_libraries(LupineEngine PRIVATE ${ENGINE_LIBRARIES})
+
+# Add library directories for all targets
+if(WIN32 AND BZIP2_LIB)
+    target_link_directories(lupine-runtime PRIVATE "${PLATFORM_DIR}/bzip2_x64-windows-static/lib")
+endif()
 
 # Add Qt libraries if editor is enabled
 if(LUPINE_ENABLE_EDITOR AND Qt6_FOUND)

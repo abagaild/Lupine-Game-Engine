@@ -49,7 +49,7 @@ set(QT_VERSION "6.9.1")
 
 if(WIN32)
     # Windows static Qt setup
-    set(QT_STATIC_DIR "${QT_DIR}/${QT_VERSION}/win64_msvc2022_64")
+    set(QT_STATIC_DIR "${QT_DIR}/${QT_VERSION}/msvc2022_64")
     if(EXISTS "${QT_STATIC_DIR}")
         set(Qt6_DIR "${QT_STATIC_DIR}/lib/cmake/Qt6")
         list(APPEND CMAKE_PREFIX_PATH "${QT_STATIC_DIR}")
@@ -66,6 +66,55 @@ if(WIN32)
         endif()
     endif()
 elseif(APPLE)
+    # macOS Homebrew paths setup
+    if(EXISTS "/opt/homebrew")
+        set(HOMEBREW_PREFIX "/opt/homebrew")
+    else()
+        set(HOMEBREW_PREFIX "/usr/local")
+    endif()
+
+    # Add Homebrew to CMAKE_PREFIX_PATH for package discovery
+    list(APPEND CMAKE_PREFIX_PATH "${HOMEBREW_PREFIX}")
+
+    # Add specific library paths for common Homebrew packages
+    set(HOMEBREW_LIB_PATHS
+        "${HOMEBREW_PREFIX}/opt/sdl2/lib/cmake"
+        "${HOMEBREW_PREFIX}/opt/sdl2_image/lib/cmake"
+        "${HOMEBREW_PREFIX}/opt/sdl2_ttf/lib/cmake"
+        "${HOMEBREW_PREFIX}/opt/sdl2_mixer/lib/cmake"
+        "${HOMEBREW_PREFIX}/opt/assimp/lib/cmake"
+        "${HOMEBREW_PREFIX}/opt/bullet/lib/cmake"
+        "${HOMEBREW_PREFIX}/opt/lua/lib/cmake"
+        "${HOMEBREW_PREFIX}/opt/yaml-cpp/lib/cmake"
+        "${HOMEBREW_PREFIX}/opt/spdlog/lib/cmake"
+        "${HOMEBREW_PREFIX}/opt/glm/lib/cmake"
+        "${HOMEBREW_PREFIX}/opt/nlohmann-json/lib/cmake"
+        "${HOMEBREW_PREFIX}/opt/pybind11/lib/cmake"
+        "${HOMEBREW_PREFIX}/opt/python@3.11/lib/cmake"
+        "${HOMEBREW_PREFIX}/opt/python@3.12/lib/cmake"
+    )
+    list(APPEND CMAKE_PREFIX_PATH ${HOMEBREW_LIB_PATHS})
+
+    # Add include directories for libraries that don't have proper CMake configs
+    include_directories(
+        "${HOMEBREW_PREFIX}/include"
+        "${HOMEBREW_PREFIX}/include/SDL2"
+        "${HOMEBREW_PREFIX}/include/box2d"
+    )
+
+    # Add vcpkg paths for libraries not available via Homebrew
+    if(EXISTS "${THIRDPARTY_DIR}/vcpkg/installed/x64-osx")
+        list(APPEND CMAKE_PREFIX_PATH "${THIRDPARTY_DIR}/vcpkg/installed/x64-osx")
+        include_directories("${THIRDPARTY_DIR}/vcpkg/installed/x64-osx/include")
+    endif()
+
+    # Add Python include paths
+    if(EXISTS "${HOMEBREW_PREFIX}/opt/python@3.11/include/python3.11")
+        include_directories("${HOMEBREW_PREFIX}/opt/python@3.11/include/python3.11")
+    elseif(EXISTS "${HOMEBREW_PREFIX}/opt/python@3.12/include/python3.12")
+        include_directories("${HOMEBREW_PREFIX}/opt/python@3.12/include/python3.12")
+    endif()
+
     # macOS static Qt setup
     set(QT_STATIC_DIR "${QT_DIR}/${QT_VERSION}/clang_64")
     if(EXISTS "${QT_STATIC_DIR}")
@@ -74,15 +123,15 @@ elseif(APPLE)
         message(STATUS "Using static Qt6 from: ${QT_STATIC_DIR}")
     else()
         # Fall back to Homebrew Qt
-        set(QT_BREW_DIR "/opt/homebrew/opt/qt6")
-        if(NOT EXISTS "${QT_BREW_DIR}")
-            set(QT_BREW_DIR "/usr/local/opt/qt6")
-        endif()
+        set(QT_BREW_DIR "${HOMEBREW_PREFIX}/opt/qt6")
         if(EXISTS "${QT_BREW_DIR}")
             list(APPEND CMAKE_PREFIX_PATH "${QT_BREW_DIR}")
             message(STATUS "Using Homebrew Qt6 from: ${QT_BREW_DIR}")
         endif()
     endif()
+
+    message(STATUS "Using Homebrew prefix: ${HOMEBREW_PREFIX}")
+    message(STATUS "CMAKE_PREFIX_PATH: ${CMAKE_PREFIX_PATH}")
 elseif(UNIX AND NOT APPLE)
     # Linux static Qt setup
     set(QT_STATIC_DIR "${QT_DIR}/${QT_VERSION}/gcc_64")

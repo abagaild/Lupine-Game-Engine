@@ -223,24 +223,39 @@ class BuildEnvironmentSetup:
 
         # Install vcpkg if not present
         vcpkg_dir = self.thirdparty_dir / "vcpkg"
-        if not vcpkg_dir.exists() or self.force:
+        vcpkg_exe = vcpkg_dir / "vcpkg.exe"
+
+        if not vcpkg_exe.exists() or self.force:
             print("Setting up vcpkg...")
-            if vcpkg_dir.exists():
+
+            # Only try to remove and clone if vcpkg.exe doesn't exist or force is specified
+            if not vcpkg_dir.exists():
+                try:
+                    self._run_command(['git', 'clone', 'https://github.com/Microsoft/vcpkg.git', str(vcpkg_dir)])
+                except Exception as e:
+                    print(f"Warning: Failed to clone vcpkg: {e}")
+                    print("Continuing without vcpkg...")
+                    return
+            elif self.force:
                 try:
                     shutil.rmtree(vcpkg_dir)
-                except PermissionError:
-                    print("Warning: Could not remove existing vcpkg directory. Continuing...")
+                    self._run_command(['git', 'clone', 'https://github.com/Microsoft/vcpkg.git', str(vcpkg_dir)])
+                except Exception as e:
+                    print(f"Warning: Could not remove/reinstall vcpkg directory: {e}")
+                    print("Using existing vcpkg installation...")
 
-            try:
-                self._run_command(['git', 'clone', 'https://github.com/Microsoft/vcpkg.git', str(vcpkg_dir)])
+            # Bootstrap vcpkg if needed
+            if not vcpkg_exe.exists():
                 bootstrap_script = vcpkg_dir / "bootstrap-vcpkg.bat"
                 if bootstrap_script.exists():
-                    self._run_command([str(bootstrap_script)], cwd=vcpkg_dir)
+                    try:
+                        self._run_command([str(bootstrap_script)], cwd=vcpkg_dir)
+                    except Exception as e:
+                        print(f"Warning: Failed to bootstrap vcpkg: {e}")
                 else:
                     print("Warning: vcpkg bootstrap script not found")
-            except Exception as e:
-                print(f"Warning: Failed to setup vcpkg: {e}")
-                print("Continuing without vcpkg...")
+        else:
+            print("vcpkg already installed")
 
         # Get triplet for this platform
         triplet = self.system_info['triplet']
@@ -1392,8 +1407,8 @@ message(STATUS "Third-party Directory: ${THIRDPARTY_DIR}")
             # Add vcpkg toolchain
             vcpkg_toolchain = self.thirdparty_dir / "vcpkg" / "scripts" / "buildsystems" / "vcpkg.cmake"
             if vcpkg_toolchain.exists():
-                cmake_args.extend(['-DCMAKE_TOOLCHAIN_FILE', str(vcpkg_toolchain)])
-                cmake_args.extend(['-DVCPKG_TARGET_TRIPLET', self.system_info['triplet']])
+                cmake_args.extend([f'-DCMAKE_TOOLCHAIN_FILE={str(vcpkg_toolchain)}'])
+                cmake_args.extend([f'-DVCPKG_TARGET_TRIPLET={self.system_info["triplet"]}'])
 
         if not self.no_qt:
             cmake_args.append('-DLUPINE_ENABLE_EDITOR=ON')
