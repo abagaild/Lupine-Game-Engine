@@ -27,12 +27,10 @@ endif()
 
 # Windows-specific settings
 set(VCPKG_DIR "${THIRDPARTY_DIR}/vcpkg")
-# Note: CMAKE_TOOLCHAIN_FILE should be set via command line or before project() call
-# This is just for reference and will be set by the build system
-set(LUPINE_VCPKG_TOOLCHAIN_FILE "${VCPKG_DIR}/scripts/buildsystems/vcpkg.cmake")
-if(EXISTS "${LUPINE_VCPKG_TOOLCHAIN_FILE}")
+if(EXISTS "${VCPKG_DIR}/scripts/buildsystems/vcpkg.cmake")
+    set(CMAKE_TOOLCHAIN_FILE "${VCPKG_DIR}/scripts/buildsystems/vcpkg.cmake")
     set(VCPKG_TARGET_TRIPLET "${LUPINE_TRIPLET}")
-    message(STATUS "vcpkg toolchain available: ${LUPINE_VCPKG_TOOLCHAIN_FILE}")
+    message(STATUS "Using vcpkg toolchain: ${CMAKE_TOOLCHAIN_FILE}")
 endif()
 
 # Windows system libraries
@@ -46,13 +44,59 @@ set(WINDOWS_SYSTEM_LIBS
 set(QT_DIR "${THIRDPARTY_DIR}/Qt")
 list(APPEND CMAKE_PREFIX_PATH "${QT_DIR}")
 
-# Qt static linking setup
+# Qt static linking setup for all platforms
+set(QT_VERSION "6.9.1")
+
 if(WIN32)
-    set(QT_STATIC_DIR "${PLATFORM_DIR}/qtbase_x64-windows-static")
+    # Windows static Qt setup
+    set(QT_STATIC_DIR "${QT_DIR}/${QT_VERSION}/win64_msvc2022_64")
     if(EXISTS "${QT_STATIC_DIR}")
-        set(Qt6_DIR "${QT_STATIC_DIR}/share/Qt6")
+        set(Qt6_DIR "${QT_STATIC_DIR}/lib/cmake/Qt6")
         list(APPEND CMAKE_PREFIX_PATH "${QT_STATIC_DIR}")
         add_compile_definitions(QT_STATIC_BUILD)
+        message(STATUS "Using static Qt6 from: ${QT_STATIC_DIR}")
+    else()
+        # Fall back to vcpkg Qt
+        set(QT_VCPKG_DIR "${PLATFORM_DIR}/qtbase_x64-windows-static")
+        if(EXISTS "${QT_VCPKG_DIR}")
+            set(Qt6_DIR "${QT_VCPKG_DIR}/share/Qt6")
+            list(APPEND CMAKE_PREFIX_PATH "${QT_VCPKG_DIR}")
+            add_compile_definitions(QT_STATIC_BUILD)
+            message(STATUS "Using vcpkg Qt6 from: ${QT_VCPKG_DIR}")
+        endif()
+    endif()
+elseif(APPLE)
+    # macOS static Qt setup
+    set(QT_STATIC_DIR "${QT_DIR}/${QT_VERSION}/clang_64")
+    if(EXISTS "${QT_STATIC_DIR}")
+        set(Qt6_DIR "${QT_STATIC_DIR}/lib/cmake/Qt6")
+        list(APPEND CMAKE_PREFIX_PATH "${QT_STATIC_DIR}")
+        message(STATUS "Using static Qt6 from: ${QT_STATIC_DIR}")
+    else()
+        # Fall back to Homebrew Qt
+        set(QT_BREW_DIR "/opt/homebrew/opt/qt6")
+        if(NOT EXISTS "${QT_BREW_DIR}")
+            set(QT_BREW_DIR "/usr/local/opt/qt6")
+        endif()
+        if(EXISTS "${QT_BREW_DIR}")
+            list(APPEND CMAKE_PREFIX_PATH "${QT_BREW_DIR}")
+            message(STATUS "Using Homebrew Qt6 from: ${QT_BREW_DIR}")
+        endif()
+    endif()
+elseif(UNIX AND NOT APPLE)
+    # Linux static Qt setup
+    set(QT_STATIC_DIR "${QT_DIR}/${QT_VERSION}/gcc_64")
+    if(EXISTS "${QT_STATIC_DIR}")
+        set(Qt6_DIR "${QT_STATIC_DIR}/lib/cmake/Qt6")
+        list(APPEND CMAKE_PREFIX_PATH "${QT_STATIC_DIR}")
+        message(STATUS "Using static Qt6 from: ${QT_STATIC_DIR}")
+    else()
+        # Fall back to current symlink or system Qt
+        set(QT_CURRENT_DIR "${QT_DIR}/current")
+        if(EXISTS "${QT_CURRENT_DIR}")
+            list(APPEND CMAKE_PREFIX_PATH "${QT_CURRENT_DIR}")
+            message(STATUS "Using Qt6 from: ${QT_CURRENT_DIR}")
+        endif()
     endif()
 endif()
 

@@ -496,7 +496,8 @@ class BuildEnvironmentSetup:
         print("Installing static Qt6 for Linux...")
 
         qt_dir = self.thirdparty_dir / "Qt"
-        qt_version = "6.9.1"  # Use Qt 6.9.1 which is what the codebase uses
+        # Qt 6.9.1 is not available for Linux, use 6.8.0 instead
+        qt_version = "6.8.0"  # Use Qt 6.8.0 for Linux (6.9.1 not available)
         qt_arch = "gcc_64"
         qt_modules = ["qtbase", "qttools", "qtdeclarative"]
 
@@ -584,7 +585,7 @@ class BuildEnvironmentSetup:
         print("Installing static Qt6 for Windows...")
 
         qt_version = "6.9.1"  # Use Qt 6.9.1 which is what the codebase uses
-        qt_arch = "win64_msvc2022_64"
+        qt_arch = "win64_msvc2022_64"  # Command line argument for aqtinstall
         qt_modules = ["qtbase", "qttools", "qtdeclarative"]
 
         # First check for existing Qt installations
@@ -925,7 +926,7 @@ class BuildEnvironmentSetup:
     def _setup_qt_linux(self, qt_dir: Path):
         """Set up Qt on Linux."""
         # First check if we have static Qt installed via aqtinstall
-        static_qt_dir = qt_dir / "6.9.1" / "gcc_64"
+        static_qt_dir = qt_dir / "6.8.0" / "gcc_64"
         if static_qt_dir.exists():
             print(f"Using static Qt6 from: {static_qt_dir}")
             # Create a symlink for easier access
@@ -1067,7 +1068,7 @@ set(QT_VERSION "6.9.1")
 
 if(WIN32)
     # Windows static Qt setup
-    set(QT_STATIC_DIR "${QT_DIR}/${QT_VERSION}/win64_msvc2022_64")
+    set(QT_STATIC_DIR "${QT_DIR}/${QT_VERSION}/msvc2022_64")
     if(EXISTS "${QT_STATIC_DIR}")
         set(Qt6_DIR "${QT_STATIC_DIR}/lib/cmake/Qt6")
         list(APPEND CMAKE_PREFIX_PATH "${QT_STATIC_DIR}")
@@ -1084,6 +1085,25 @@ if(WIN32)
         endif()
     endif()
 elseif(APPLE)
+    # macOS Homebrew paths setup
+    if(EXISTS "/opt/homebrew")
+        set(HOMEBREW_PREFIX "/opt/homebrew")
+    else()
+        set(HOMEBREW_PREFIX "/usr/local")
+    endif()
+
+    # Add Homebrew include and library paths
+    include_directories("${HOMEBREW_PREFIX}/include")
+    link_directories("${HOMEBREW_PREFIX}/lib")
+    list(APPEND CMAKE_PREFIX_PATH "${HOMEBREW_PREFIX}")
+
+    # Add Python include path for pybind11
+    if(EXISTS "${HOMEBREW_PREFIX}/opt/python@3.11/include")
+        include_directories("${HOMEBREW_PREFIX}/opt/python@3.11/include/python3.11")
+    elseif(EXISTS "${HOMEBREW_PREFIX}/opt/python@3.12/include")
+        include_directories("${HOMEBREW_PREFIX}/opt/python@3.12/include/python3.12")
+    endif()
+
     # macOS static Qt setup
     set(QT_STATIC_DIR "${QT_DIR}/${QT_VERSION}/clang_64")
     if(EXISTS "${QT_STATIC_DIR}")
@@ -1092,15 +1112,14 @@ elseif(APPLE)
         message(STATUS "Using static Qt6 from: ${QT_STATIC_DIR}")
     else()
         # Fall back to Homebrew Qt
-        set(QT_BREW_DIR "/opt/homebrew/opt/qt6")
-        if(NOT EXISTS "${QT_BREW_DIR}")
-            set(QT_BREW_DIR "/usr/local/opt/qt6")
-        endif()
+        set(QT_BREW_DIR "${HOMEBREW_PREFIX}/opt/qt6")
         if(EXISTS "${QT_BREW_DIR}")
             list(APPEND CMAKE_PREFIX_PATH "${QT_BREW_DIR}")
             message(STATUS "Using Homebrew Qt6 from: ${QT_BREW_DIR}")
         endif()
     endif()
+
+    message(STATUS "Using Homebrew prefix: ${HOMEBREW_PREFIX}")
 elseif(UNIX AND NOT APPLE)
     # Linux static Qt setup
     set(QT_STATIC_DIR "${QT_DIR}/${QT_VERSION}/gcc_64")
@@ -1197,11 +1216,12 @@ message(STATUS "Third-party Directory: ${THIRDPARTY_DIR}")
             qt_found = False
             qt_dir = self.thirdparty_dir / "Qt"
 
-            # Check for aqtinstall Qt installation first
-            qt_version = "6.9.1"
+            # Check for aqtinstall Qt installation first (different versions per platform)
             if self.system_info['system'] == 'windows':
-                qt_arch = "win64_msvc2022_64"
-                aqt_qt_dir = qt_dir / qt_version / qt_arch
+                qt_version = "6.9.1"  # Windows supports 6.9.1
+                # aqtinstall creates directory with different name than command line arg
+                qt_arch_dir = "msvc2022_64"  # Actual directory name created
+                aqt_qt_dir = qt_dir / qt_version / qt_arch_dir
                 qt_found = (aqt_qt_dir / "include" / "QtCore").exists() or (aqt_qt_dir / "lib" / "Qt6Core.lib").exists()
 
                 # Fallback to vcpkg Qt
@@ -1210,6 +1230,7 @@ message(STATUS "Third-party Directory: ${THIRDPARTY_DIR}")
                     qt_found = vcpkg_qt.exists()
 
             elif self.system_info['system'] == 'macos':
+                qt_version = "6.9.1"  # macOS supports 6.9.1
                 qt_arch = "clang_64"
                 aqt_qt_dir = qt_dir / qt_version / qt_arch
                 qt_found = (aqt_qt_dir / "include" / "QtCore").exists() or (aqt_qt_dir / "lib" / "libQt6Core.a").exists()
@@ -1220,6 +1241,7 @@ message(STATUS "Third-party Directory: ${THIRDPARTY_DIR}")
                     qt_found = brew_qt.exists()
 
             elif self.system_info['system'] == 'linux':
+                qt_version = "6.8.0"  # Linux uses 6.8.0 (6.9.1 not available)
                 qt_arch = "gcc_64"
                 aqt_qt_dir = qt_dir / qt_version / qt_arch
                 qt_found = (aqt_qt_dir / "include" / "QtCore").exists() or (aqt_qt_dir / "lib" / "libQt6Core.a").exists()
