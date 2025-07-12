@@ -33,6 +33,10 @@ if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
 endif()
 
+# Include custom CMake modules early
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
+include(FindQt6Robust)
+
 #--- vcpkg Integration (after project() call) ---
 # Handle vcpkg toolchain if not already set via command line
 if(NOT CMAKE_TOOLCHAIN_FILE AND DEFINED LUPINE_VCPKG_TOOLCHAIN_FILE)
@@ -342,9 +346,6 @@ message(STATUS "=== Library Configuration ===")
 
 # Add our custom CMake modules to the path
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
-
-# Include Qt6 robust configuration functions
-include(FindQt6Robust)
 
 # Modern CMake approach using vcpkg targets
 set(ENGINE_LIBRARIES)

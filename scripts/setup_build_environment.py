@@ -281,8 +281,9 @@ class BuildEnvironmentSetup:
         # Essential dependencies for basic functionality
         essential_dependencies = [
             'sdl2', 'glm', 'nlohmann-json', 'glad', 'lua',
-            'python3',  # Python interpreter and development libraries
-            'pybind11'  # For Python scripting support
+            'python3[core,dev]',  # Python interpreter and development libraries with headers
+            'pybind11',  # For Python scripting support
+            'fmt'  # Required by spdlog
         ]
 
         # Install static Qt separately if needed
@@ -311,6 +312,9 @@ class BuildEnvironmentSetup:
         if not self.dev_only:
             print("Installing optional dependencies...")
             self._install_vcpkg_packages_parallel(vcpkg_exe, optional_dependencies, triplet, ignore_failures=True)
+
+        # Copy missing dependencies from vcpkg to platform directory
+        self._copy_missing_vcpkg_packages(vcpkg_dir, triplet)
 
         # Integrate vcpkg with Visual Studio
         print("Integrating vcpkg with Visual Studio...")
@@ -760,6 +764,67 @@ class BuildEnvironmentSetup:
             print(f"Binary caching enabled at {cache_dir}")
         except Exception as e:
             print(f"Warning: Could not set up binary caching: {e}")
+
+    def _copy_missing_vcpkg_packages(self, vcpkg_dir: Path, triplet: str):
+        """Copy missing packages from vcpkg to platform directory"""
+        try:
+            vcpkg_installed = vcpkg_dir / "installed" / triplet
+            platform_dir = self.thirdparty_dir / self.system_info['platform_dir']
+
+            if not vcpkg_installed.exists():
+                print(f"[WARNING] vcpkg installed directory not found: {vcpkg_installed}")
+                return
+
+            # List of packages that need to be copied from vcpkg to platform directory
+            # This is needed when spdlog depends on fmt but fmt is only in vcpkg
+            packages_to_copy = ['fmt']
+
+            for package in packages_to_copy:
+                vcpkg_package_dir = vcpkg_installed / "share" / package
+                platform_package_dir = platform_dir / f"{package}_{triplet}"
+
+                if vcpkg_package_dir.exists() and not platform_package_dir.exists():
+                    print(f"Copying {package} from vcpkg to platform directory...")
+
+                    # Create the platform package directory structure
+                    platform_package_dir.mkdir(parents=True, exist_ok=True)
+                    (platform_package_dir / "share" / package).mkdir(parents=True, exist_ok=True)
+
+                    # Copy the CMake configuration files
+                    import shutil
+                    shutil.copytree(vcpkg_package_dir, platform_package_dir / "share" / package, dirs_exist_ok=True)
+
+                    # Copy include and lib directories if they exist
+                    vcpkg_include = vcpkg_installed / "include"
+                    vcpkg_lib = vcpkg_installed / "lib"
+                    vcpkg_debug_lib = vcpkg_installed / "debug" / "lib"
+
+                    if vcpkg_include.exists():
+                        platform_include = platform_package_dir / "include"
+                        if not platform_include.exists():
+                            shutil.copytree(vcpkg_include, platform_include, dirs_exist_ok=True)
+
+                    if vcpkg_lib.exists():
+                        platform_lib = platform_package_dir / "lib"
+                        if not platform_lib.exists():
+                            shutil.copytree(vcpkg_lib, platform_lib, dirs_exist_ok=True)
+
+                    if vcpkg_debug_lib.exists():
+                        platform_debug = platform_package_dir / "debug"
+                        platform_debug.mkdir(exist_ok=True)
+                        platform_debug_lib = platform_debug / "lib"
+                        if not platform_debug_lib.exists():
+                            shutil.copytree(vcpkg_debug_lib, platform_debug_lib, dirs_exist_ok=True)
+
+                    print(f"[OK] Copied {package} to {platform_package_dir}")
+                elif platform_package_dir.exists():
+                    print(f"[OK] {package} already exists in platform directory")
+                else:
+                    print(f"[WARNING] {package} not found in vcpkg installation")
+
+        except Exception as e:
+            print(f"[WARNING] Failed to copy vcpkg packages: {e}")
+            # Continue without copying - build might still work
 
     def _install_vcpkg_packages_parallel(self, vcpkg_exe: Path, packages: list, triplet: str, ignore_failures: bool = False):
         """Install vcpkg packages with parallel processing."""
@@ -1291,7 +1356,12 @@ message(STATUS "Third-party Directory: ${THIRDPARTY_DIR}")
             # Check vcpkg Python installation
             vcpkg_python = self.thirdparty_dir / "vcpkg" / "installed" / self.system_info['triplet'] / "include" / "Python.h"
             platform_python = self.thirdparty_dir / "Windows" / "python3_x64-windows-static" / "include" / "Python.h"
-            if not (vcpkg_python.exists() or platform_python.exists()):
+
+            # Also check for python3 subdirectory (common in vcpkg)
+            vcpkg_python_subdir = self.thirdparty_dir / "vcpkg" / "installed" / self.system_info['triplet'] / "include" / "python3.12" / "Python.h"
+            vcpkg_python_generic = self.thirdparty_dir / "vcpkg" / "installed" / self.system_info['triplet'] / "include" / "python3" / "Python.h"
+
+            if not (vcpkg_python.exists() or platform_python.exists() or vcpkg_python_subdir.exists() or vcpkg_python_generic.exists()):
                 missing_deps.append("Python development headers")
 
             # Check pybind11
