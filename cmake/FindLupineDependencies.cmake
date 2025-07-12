@@ -68,8 +68,26 @@ lupine_find_component(SDL2
 lupine_find_component(GRAPHICS
     LIBRARIES
         "GLAD_LIB:glad,glad-static"
-        "GLM_LIB:glm"  # Header-only, may not have lib
 )
+
+# Find GLM (header-only library)
+find_path(GLM_INCLUDE_DIR
+    NAMES glm/glm.hpp
+    PATHS
+        /usr/include
+        /usr/local/include
+        /opt/homebrew/include
+        ${CMAKE_PREFIX_PATH}
+    PATH_SUFFIXES include
+)
+
+if(GLM_INCLUDE_DIR)
+    message(STATUS "Found GLM: ${GLM_INCLUDE_DIR}")
+    set(GLM_FOUND TRUE)
+else()
+    message(STATUS "GLM not found")
+    set(GLM_FOUND FALSE)
+endif()
 
 # Physics Component
 lupine_find_component(PHYSICS

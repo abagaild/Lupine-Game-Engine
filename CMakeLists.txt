@@ -218,7 +218,7 @@ if(LUPINE_ENABLE_EDITOR)
   find_package(Qt6 QUIET COMPONENTS Core Widgets Gui)
 
   if(Qt6_FOUND)
-    message(STATUS "✅ Qt6 found successfully")
+    message(STATUS "[OK] Qt6 found successfully")
 
     # Try to find optional OpenGL components
     find_package(Qt6OpenGL QUIET)
@@ -230,13 +230,13 @@ if(LUPINE_ENABLE_EDITOR)
     find_program(Qt6_RCC_EXECUTABLE NAMES rcc rcc.exe)
 
     if(Qt6_MOC_EXECUTABLE AND Qt6_UIC_EXECUTABLE AND Qt6_RCC_EXECUTABLE)
-      message(STATUS "✅ Qt6 tools found")
+      message(STATUS "[OK] Qt6 tools found")
     else()
-      message(WARNING "⚠️  Some Qt6 tools missing, but continuing...")
+      message(WARNING "[WARN] Some Qt6 tools missing, but continuing...")
     endif()
 
   else()
-    message(WARNING "❌ Qt6 not found. Disabling editor build.")
+    message(WARNING "[ERROR] Qt6 not found. Disabling editor build.")
     set(LUPINE_ENABLE_EDITOR OFF)
   endif()
 else()
@@ -357,6 +357,12 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
 # Use our custom dependency finder
 find_package(LupineDependencies REQUIRED)
+
+# Add GLM include directory if found
+if(GLM_FOUND AND GLM_INCLUDE_DIR)
+  target_include_directories(LupineEngine PRIVATE ${GLM_INCLUDE_DIR})
+  message(STATUS "Added GLM include directory: ${GLM_INCLUDE_DIR}")
+endif()
 
 # Add GLAD source or library
 set(GLAD_SOURCE_ADDED FALSE)
@@ -544,9 +550,9 @@ if(LUPINE_ENABLE_CROSS_COMPILATION)
     set(platform_lib_dir "${THIRDPARTY_DIR}/${platform}/lib")
     if(EXISTS "${platform_lib_dir}")
       list(APPEND AVAILABLE_PLATFORMS ${platform})
-      message(STATUS "✅ ${platform} libraries available")
+      message(STATUS "[OK] ${platform} libraries available")
     else()
-      message(STATUS "❌ ${platform} libraries missing")
+      message(STATUS "[WARN] ${platform} libraries missing")
     endif()
   endforeach()
 

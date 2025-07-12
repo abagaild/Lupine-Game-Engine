@@ -159,6 +159,9 @@ class BuildEnvironmentSetup:
             self._run_command(['git', 'clone', 'https://github.com/Microsoft/vcpkg.git', str(vcpkg_dir)])
             self._run_command([str(vcpkg_dir / "bootstrap-vcpkg.bat")])
 
+        # Get triplet for this platform
+        triplet = self.system_info['triplet']
+
         # Check if precompiled libraries are available
         # Update this URL to point to your actual GitHub repository
         precompiled_url = "https://github.com/Kurokamori/lupine-game-engine/releases/latest/download"
@@ -173,7 +176,6 @@ class BuildEnvironmentSetup:
 
         # Install dependencies via vcpkg with optimizations
         vcpkg_exe = vcpkg_dir / "vcpkg.exe"
-        triplet = self.system_info['triplet']
 
         # Enable binary caching for faster builds
         self._setup_vcpkg_binary_caching(vcpkg_dir)
@@ -230,7 +232,8 @@ class BuildEnvironmentSetup:
             'cmake', 'pkg-config', 'python3', 'ninja',
             'sdl2', 'sdl2_image', 'sdl2_ttf', 'sdl2_mixer',
             'assimp', 'bullet', 'lua', 'yaml-cpp', 'spdlog',
-            'libpng', 'jpeg', 'freetype', 'zlib', 'openssl'
+            'libpng', 'jpeg', 'freetype', 'zlib', 'openssl',
+            'glm'  # OpenGL Mathematics library
         ]
 
         # Audio dependencies
@@ -290,7 +293,7 @@ class BuildEnvironmentSetup:
         dev_deps = [
             'libbz2-dev', 'liblzma-dev', 'liblz4-dev', 'libzstd-dev',
             'libx11-dev', 'libxext-dev', 'libxrender-dev', 'libgl1-mesa-dev',
-            'libasound2-dev', 'libpulse-dev', 'libglfw3-dev'
+            'libasound2-dev', 'libpulse-dev', 'libglfw3-dev', 'libglm-dev'
         ]
 
         qt_deps = []
@@ -354,7 +357,7 @@ class BuildEnvironmentSetup:
             # Clean up downloaded archive
             local_path.unlink()
 
-            print("✅ Precompiled libraries downloaded and extracted successfully!")
+            print("Precompiled libraries downloaded and extracted successfully!")
             return True
 
         except Exception as e:
@@ -401,12 +404,12 @@ class BuildEnvironmentSetup:
                 package, success, result = future.result()
 
                 if success:
-                    print(f"✅ {package} installed successfully")
+                    print(f"[OK] {package} installed successfully")
                 else:
                     if ignore_failures:
-                        print(f"⚠️  {package} failed to install (optional): {result}")
+                        print(f"[WARN] {package} failed to install (optional): {result}")
                     else:
-                        print(f"❌ {package} failed to install: {result}")
+                        print(f"[ERROR] {package} failed to install: {result}")
 
     def setup_cross_compilation_libraries(self):
         """Set up libraries for all target platforms to enable cross-compilation."""
@@ -427,7 +430,7 @@ class BuildEnvironmentSetup:
 
             # Check if we already have libraries for this platform
             if self._platform_libraries_exist(platform_dir):
-                print(f"✅ {platform} libraries already available")
+                print(f"[OK] {platform} libraries already available")
                 continue
 
             # Try to download precompiled libraries
@@ -436,9 +439,9 @@ class BuildEnvironmentSetup:
             local_path = self.thirdparty_dir / archive_name
 
             if self._download_precompiled_libraries(precompiled_url, archive_name, local_path):
-                print(f"✅ {platform} precompiled libraries downloaded")
+                print(f"[OK] {platform} precompiled libraries downloaded")
             else:
-                print(f"⚠️  {platform} precompiled libraries not available")
+                print(f"[WARN] {platform} precompiled libraries not available")
                 # Could add logic here to build from source for other platforms
 
         # Create cross-compilation manifest
@@ -649,8 +652,9 @@ set(MACOS_SYSTEM_FRAMEWORKS
         elif self.system_info['system'] == 'linux':
             config_content += """
 # Linux-specific settings
-find_package(Threads REQUIRED)
-find_package(PkgConfig REQUIRED)
+# Note: find_package calls should be done after project() declaration
+# find_package(Threads REQUIRED) - moved to main CMakeLists.txt
+# find_package(PkgConfig REQUIRED) - moved to main CMakeLists.txt
 
 # Linux system libraries
 set(LINUX_SYSTEM_LIBS
@@ -764,12 +768,12 @@ message(STATUS "Third-party Directory: ${THIRDPARTY_DIR}")
                 missing_deps.append("Qt6 development libraries")
 
         if missing_deps:
-            print("❌ Missing dependencies:")
+            print("[ERROR] Missing dependencies:")
             for dep in missing_deps:
                 print(f"  - {dep}")
             return False
         else:
-            print("✅ All dependencies verified")
+            print("[OK] All dependencies verified")
             return True
 
     def setup_cross_platform_libraries(self):
@@ -859,10 +863,12 @@ message(STATUS "Third-party Directory: ${THIRDPARTY_DIR}")
         else:
             cmake_args.append('-DLUPINE_ENABLE_EDITOR=OFF')
 
-        # Add platform config
+        # Platform config will be included automatically by CMakeLists.txt
         platform_config = self.root_dir / "cmake" / "PlatformConfig.cmake"
         if platform_config.exists():
-            cmake_args.extend(['-C', str(platform_config)])
+            print(f"Platform config available: {platform_config}")
+        else:
+            print("Platform config not found, using default configuration")
 
         self._run_command(cmake_args)
 
@@ -951,9 +957,9 @@ def main():
     try:
         if args.verify_only:
             if setup.verify_dependencies():
-                print("\n✅ All dependencies are available!")
+                print("\n[OK] All dependencies are available!")
             else:
-                print("\n❌ Some dependencies are missing. Run without --verify-only to install them.")
+                print("\n[ERROR] Some dependencies are missing. Run without --verify-only to install them.")
                 sys.exit(1)
             return
 
@@ -969,7 +975,7 @@ def main():
             if not args.dev_only:
                 setup.run_initial_build()
 
-            print("\n✅ Build environment setup completed successfully!")
+            print("\n[OK] Build environment setup completed successfully!")
             print(f"You can now build the project with:")
             if setup.system_info['system'] == 'windows':
                 print(f"  build.bat")
@@ -978,11 +984,11 @@ def main():
             print(f"Or manually with:")
             print(f"  cmake --build build --config Release")
         else:
-            print("\n⚠️  Setup completed but some dependencies may be missing.")
+            print("\n[WARN] Setup completed but some dependencies may be missing.")
             print("Run with --verify-only to check what's missing.")
 
     except Exception as e:
-        print(f"\n❌ Setup failed: {e}")
+        print(f"\nSetup failed: {e}")
         import traceback
         traceback.print_exc()
         sys.exit(1)
