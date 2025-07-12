@@ -354,6 +354,17 @@ class PrecompiledLibraryBuilder:
             return False
 
         try:
+            # Handle "latest" tag specially
+            if tag == "latest":
+                # Check if latest release exists and delete it first
+                try:
+                    subprocess.run(["gh", "release", "delete", tag, "--repo", repo, "--yes"],
+                                 env={**os.environ, "GITHUB_TOKEN": token},
+                                 capture_output=True, timeout=60)
+                    print("Deleted existing 'latest' release")
+                except:
+                    print("No existing 'latest' release found")
+
             # Create or update release
             cmd = [
                 "gh", "release", "create", tag,
@@ -361,6 +372,10 @@ class PrecompiledLibraryBuilder:
                 "--title", f"Precompiled Libraries {tag}",
                 "--notes", "Precompiled static libraries for fast Lupine Engine setup"
             ]
+
+            # For latest tag, make it the latest release
+            if tag == "latest":
+                cmd.append("--latest")
 
             # Add all package files
             for file in zip_files:

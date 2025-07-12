@@ -142,7 +142,7 @@ jobs:
           libminizip-dev libvorbis-dev libogg-dev libflac-dev \
           libmpg123-dev libopus-dev libbz2-dev liblz4-dev \
           libwavpack-dev libsqlite3-dev libssl-dev libglm-dev \
-          libsndfile1-dev qtbase5-dev pybind11-dev
+          libsndfile1-dev qtbase6-dev pybind11-dev
 
         # Try to install additional libraries that might have different names
         sudo apt-get install -y libmp3lame-dev || echo "mp3lame not available"
@@ -175,7 +175,7 @@ jobs:
         brew install bzip2 lz4 wavpack sqlite openssl glm || echo "Some utility packages failed"
 
         # Development libraries
-        brew install qt pybind11 || echo "Development packages failed"
+        brew install qt6 pybind11 || echo "Development packages failed"
 
         # Try boost separately as it might have different name
         brew install boost || echo "boost not available"
@@ -283,7 +283,7 @@ jobs:
           cp -r /usr/include/glm "thirdparty/${{ matrix.platform }}/include/" 2>/dev/null || true
           cp -r /usr/include/boost "thirdparty/${{ matrix.platform }}/include/" 2>/dev/null || true
           cp -r /usr/include/sndfile* "thirdparty/${{ matrix.platform }}/include/" 2>/dev/null || true
-          cp -r /usr/include/x86_64-linux-gnu/qt5 "thirdparty/${{ matrix.platform }}/include/qt5" 2>/dev/null || true
+          cp -r /usr/include/x86_64-linux-gnu/qt6 "thirdparty/${{ matrix.platform }}/include/qt6" 2>/dev/null || true
           cp -r /usr/include/pybind11 "thirdparty/${{ matrix.platform }}/include/" 2>/dev/null || true
           echo "Copied libraries from system packages"
 
@@ -329,10 +329,10 @@ jobs:
 
             # List contents of the package
             echo "Package contents:"
-            unzip -l "$PACKAGE_PATH" | head -20
+            unzip -l "$PACKAGE_PATH" | head -20 || true
 
             # Count files in package
-            FILE_COUNT=$(unzip -l "$PACKAGE_PATH" | grep -c "^[[:space:]]*[0-9]")
+            FILE_COUNT=$(unzip -l "$PACKAGE_PATH" 2>/dev/null | grep -c "^[[:space:]]*[0-9]" || echo "0")
             echo "Total files in package: $FILE_COUNT"
 
             if [ "$FILE_COUNT" -lt 5 ]; then
@@ -420,7 +420,7 @@ jobs:
         if [ -n "${{ github.event.inputs.tag_name }}" ]; then
           TAG="${{ github.event.inputs.tag_name }}"
         else
-          TAG="precompiled-$(date +%Y%m%d-%H%M%S)"
+          TAG="latest"
         fi
         
         echo "Using tag: $TAG"
