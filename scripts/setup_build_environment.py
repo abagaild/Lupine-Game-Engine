@@ -104,7 +104,7 @@ class BuildEnvironmentSetup:
         else:
             raise RuntimeError(f"Unsupported system: {system}")
 
-    def _run_command(self, cmd: List[str], check: bool = True, capture: bool = False, cwd: Optional[Path] = None) -> Optional[str]:
+    def _run_command(self, cmd: List[str], check: bool = True, capture: bool = False, cwd: Optional[Path] = None, env: Optional[dict] = None) -> Optional[str]:
         """Run a command and optionally capture output."""
         try:
             # Convert Path objects to strings for subprocess
@@ -112,10 +112,10 @@ class BuildEnvironmentSetup:
             working_dir = str(cwd) if cwd else None
 
             if capture:
-                result = subprocess.run(str_cmd, check=check, capture_output=True, text=True, cwd=working_dir)
+                result = subprocess.run(str_cmd, check=check, capture_output=True, text=True, cwd=working_dir, env=env)
                 return result.stdout.strip()
             else:
-                subprocess.run(str_cmd, check=check, cwd=working_dir)
+                subprocess.run(str_cmd, check=check, cwd=working_dir, env=env)
                 return None
         except subprocess.CalledProcessError as e:
             if check:
@@ -135,6 +135,57 @@ class BuildEnvironmentSetup:
     def _check_command_exists(self, command: str) -> bool:
         """Check if a command exists in PATH."""
         return shutil.which(command) is not None
+
+    def _check_visual_studio_compiler(self) -> bool:
+        """Check if Visual Studio compiler is available on Windows."""
+        if self.system_info['system'] != 'windows':
+            return False
+
+        # First check if cl is directly available
+        if self._check_command_exists('cl'):
+            return True
+
+        # Check common Visual Studio installation paths
+        vs_paths = [
+            "C:/Program Files/Microsoft Visual Studio/2022/Community/VC/Tools/MSVC",
+            "C:/Program Files/Microsoft Visual Studio/2022/Professional/VC/Tools/MSVC",
+            "C:/Program Files/Microsoft Visual Studio/2022/Enterprise/VC/Tools/MSVC",
+            "C:/Program Files (x86)/Microsoft Visual Studio/2019/Community/VC/Tools/MSVC",
+            "C:/Program Files (x86)/Microsoft Visual Studio/2019/Professional/VC/Tools/MSVC",
+            "C:/Program Files (x86)/Microsoft Visual Studio/2019/Enterprise/VC/Tools/MSVC"
+        ]
+
+        for vs_path in vs_paths:
+            vs_dir = Path(vs_path)
+            if vs_dir.exists():
+                # Look for any MSVC version directory
+                for version_dir in vs_dir.iterdir():
+                    if version_dir.is_dir():
+                        cl_path = version_dir / "bin" / "Hostx64" / "x64" / "cl.exe"
+                        if cl_path.exists():
+                            print(f"Found Visual Studio compiler at: {cl_path}")
+                            return True
+
+        # Check if we can find vswhere to locate Visual Studio
+        vswhere_path = Path("C:/Program Files (x86)/Microsoft Visual Studio/Installer/vswhere.exe")
+        if vswhere_path.exists():
+            try:
+                result = self._run_command([str(vswhere_path), "-latest", "-property", "installationPath"], capture=True)
+                if result:
+                    vs_install_path = Path(result.strip())
+                    cl_path = vs_install_path / "VC" / "Tools" / "MSVC"
+                    if cl_path.exists():
+                        # Look for any MSVC version
+                        for version_dir in cl_path.iterdir():
+                            if version_dir.is_dir():
+                                cl_exe = version_dir / "bin" / "Hostx64" / "x64" / "cl.exe"
+                                if cl_exe.exists():
+                                    print(f"Found Visual Studio compiler via vswhere at: {cl_exe}")
+                                    return True
+            except:
+                pass
+
+        return False
 
     def install_system_dependencies(self):
         """Install system dependencies using the appropriate package manager."""
@@ -898,22 +949,37 @@ class BuildEnvironmentSetup:
         if self.dev_only:
             print("Skipping Emscripten setup (--dev-only specified)")
             return
-            
+
         print("Setting up Emscripten SDK...")
         emsdk_dir = self.thirdparty_dir / "emsdk"
-        
+
         if not emsdk_dir.exists() or self.force:
             if emsdk_dir.exists():
                 shutil.rmtree(emsdk_dir)
-                
+
             print("Cloning Emscripten SDK...")
             self._run_command(['git', 'clone', 'https://github.com/emscripten-core/emsdk.git', str(emsdk_dir)])
-            
+
             # Install and activate latest Emscripten
             emsdk_cmd = str(emsdk_dir / ('emsdk.bat' if self.system_info['system'] == 'windows' else 'emsdk'))
-            self._run_command([emsdk_cmd, 'install', 'latest'])
-            self._run_command([emsdk_cmd, 'activate', 'latest'])
-            
+
+            # Fix Python command for Windows
+            if self.system_info['system'] == 'windows':
+                # Patch emsdk.bat to use 'py' instead of 'python'
+                emsdk_bat_path = emsdk_dir / 'emsdk.bat'
+                if emsdk_bat_path.exists():
+                    content = emsdk_bat_path.read_text()
+                    # Replace the fallback python command with py
+                    content = content.replace('set EMSDK_PY=python', 'set EMSDK_PY=py')
+                    emsdk_bat_path.write_text(content)
+                    print("Patched emsdk.bat to use 'py' command")
+
+                self._run_command([emsdk_cmd, 'install', 'latest'])
+                self._run_command([emsdk_cmd, 'activate', 'latest'])
+            else:
+                self._run_command([emsdk_cmd, 'install', 'latest'])
+                self._run_command([emsdk_cmd, 'activate', 'latest'])
+
             print("Emscripten SDK installed successfully")
         else:
             print("Emscripten SDK already exists")
@@ -1167,7 +1233,9 @@ message(STATUS "Third-party Directory: ${THIRDPARTY_DIR}")
         # Check basic build tools
         required_tools = ['cmake', 'git']
         if self.system_info['system'] == 'windows':
-            required_tools.append('cl')  # MSVC compiler
+            # Use specialized Visual Studio detection for Windows
+            if not self._check_visual_studio_compiler():
+                missing_deps.append("Command: cl (Visual Studio compiler)")
         else:
             required_tools.extend(['gcc', 'g++'])
 
@@ -1198,7 +1266,9 @@ message(STATUS "Third-party Directory: ${THIRDPARTY_DIR}")
                 # aqtinstall creates directory with different name than command line arg
                 qt_arch_dir = "msvc2022_64"  # Actual directory name created
                 aqt_qt_dir = qt_dir / qt_version / qt_arch_dir
-                qt_found = (aqt_qt_dir / "include" / "QtCore").exists() or (aqt_qt_dir / "lib" / "Qt6Core.lib").exists()
+                qt_found = (aqt_qt_dir / "include" / "QtCore").exists() and (aqt_qt_dir / "lib" / "Qt6Core.lib").exists()
+                if qt_found:
+                    print(f"Found Qt 6.9.1 installation at: {aqt_qt_dir}")
 
                 # Fallback to vcpkg Qt
                 if not qt_found:
