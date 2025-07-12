@@ -78,7 +78,7 @@ jobs:
         choco install cmake git ninja -y
         Write-Host "Current directory: $(Get-Location)"
         if (Test-Path "scripts\setup_build_environment.py") {
-          python scripts\setup_build_environment.py --force --no-qt --dev-only
+          python scripts\setup_build_environment.py --force
         } else {
           Write-Host "scripts\setup_build_environment.py not found!"
           Get-ChildItem -Recurse -Filter "*.py" | Select-Object -ExpandProperty Name
@@ -92,9 +92,9 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y build-essential cmake ninja-build pkg-config
         if [ -f "scripts/setup_build_environment.py" ]; then
-          python3 scripts/setup_build_environment.py --force --no-qt --dev-only
+          python3 scripts/setup_build_environment.py --force
         else
-          echo "❌ scripts/setup_build_environment.py not found!"
+          echo "[ERROR] scripts/setup_build_environment.py not found!"
           find . -name "*.py" -type f
           exit 1
         fi
@@ -105,9 +105,9 @@ jobs:
         brew update
         brew install cmake ninja pkg-config
         if [ -f "scripts/setup_build_environment.py" ]; then
-          python3 scripts/setup_build_environment.py --force --no-qt --dev-only
+          python3 scripts/setup_build_environment.py --force
         else
-          echo "❌ scripts/setup_build_environment.py not found!"
+          echo "[ERROR] scripts/setup_build_environment.py not found!"
           find . -name "*.py" -type f
           exit 1
         fi
@@ -120,7 +120,7 @@ jobs:
         if [ -f "scripts/build_precompiled_libs.py" ]; then
           python3 scripts/build_precompiled_libs.py --platform ${{ matrix.platform }}
         else
-          echo "❌ scripts/build_precompiled_libs.py not found!"
+          echo "[ERROR] scripts/build_precompiled_libs.py not found!"
           exit 1
         fi
       shell: bash
@@ -260,7 +260,7 @@ jobs:
         if [ -f "scripts/setup_build_environment.py" ]; then
           python3 scripts/setup_build_environment.py --verify-only
         else
-          echo "❌ scripts/setup_build_environment.py not found!"
+          echo "[ERROR] scripts/setup_build_environment.py not found!"
           exit 1
         fi
       shell: bash
@@ -268,7 +268,7 @@ jobs:
     - name: Test CMake configuration
       run: |
         # Add platform config if available
-        CMAKE_ARGS="-B test_build -S . -DCMAKE_BUILD_TYPE=Release -DLUPINE_ENABLE_EDITOR=OFF"
+        CMAKE_ARGS="-B test_build -S . -DCMAKE_BUILD_TYPE=Release -DLUPINE_ENABLE_EDITOR=ON -DLUPINE_ENABLE_EXPORT=ON"
         if [ -f "cmake/PlatformConfig.cmake" ]; then
           CMAKE_ARGS="$CMAKE_ARGS -C cmake/PlatformConfig.cmake"
         fi
