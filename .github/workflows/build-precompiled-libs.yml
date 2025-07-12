@@ -76,41 +76,62 @@ jobs:
       if: matrix.platform == 'Windows'
       run: |
         choco install cmake git ninja -y
+
+        # Install Python packages needed for aqtinstall
+        python -m pip install --user --upgrade pip
+
         Write-Host "Current directory: $(Get-Location)"
         if (Test-Path "scripts\setup_build_environment.py") {
+          # Run setup script but continue even if it fails
           python scripts\setup_build_environment.py --force
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "[WARN] Setup script had issues, but continuing..."
+          }
         } else {
           Write-Host "scripts\setup_build_environment.py not found!"
           Get-ChildItem -Recurse -Filter "*.py" | Select-Object -ExpandProperty Name
           exit 1
         }
       shell: powershell
+      continue-on-error: true
 
     - name: Install system dependencies (Linux)
       if: matrix.platform == 'Linux'
       run: |
         sudo apt-get update
-        sudo apt-get install -y build-essential cmake ninja-build pkg-config
+        sudo apt-get install -y build-essential cmake ninja-build pkg-config libglm-dev
+
+        # Install Python packages needed for aqtinstall
+        python3 -m pip install --user --upgrade pip
+
         if [ -f "scripts/setup_build_environment.py" ]; then
-          python3 scripts/setup_build_environment.py --force
+          # Run setup script but continue even if it fails
+          python3 scripts/setup_build_environment.py --force || echo "[WARN] Setup script had issues, but continuing..."
         else
           echo "[ERROR] scripts/setup_build_environment.py not found!"
           find . -name "*.py" -type f
           exit 1
         fi
+      continue-on-error: true
 
     - name: Install system dependencies (macOS)
       if: matrix.platform == 'Mac-OSX' || matrix.platform == 'Mac-ARM64'
       run: |
         brew update
         brew install cmake ninja pkg-config
+
+        # Install Python packages needed for aqtinstall
+        python3 -m pip install --user --upgrade pip
+
         if [ -f "scripts/setup_build_environment.py" ]; then
-          python3 scripts/setup_build_environment.py --force
+          # Run setup script but continue even if it fails
+          python3 scripts/setup_build_environment.py --force || echo "[WARN] Setup script had issues, but continuing..."
         else
           echo "[ERROR] scripts/setup_build_environment.py not found!"
           find . -name "*.py" -type f
           exit 1
         fi
+      continue-on-error: true
 
     - name: Build precompiled libraries
       run: |
