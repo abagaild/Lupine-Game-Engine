@@ -345,9 +345,9 @@ bool MacExporter::CreateInfoPlist(const std::filesystem::path& bundle_path, cons
         plist << "    <key>CFBundleDisplayName</key>\n";
         plist << "    <string>" << executable_name << "</string>\n";
         plist << "    <key>CFBundleVersion</key>\n";
-        plist << "    <string>" << (config.mac.version_info.empty() ? "1.0.0" : config.mac.version_info) << "</string>\n";
+        plist << "    <string>" << (config.mac.version_info.version.empty() ? "1.0.0" : config.mac.version_info.version) << "</string>\n";
         plist << "    <key>CFBundleShortVersionString</key>\n";
-        plist << "    <string>" << (config.mac.version_info.empty() ? "1.0.0" : config.mac.version_info) << "</string>\n";
+        plist << "    <string>" << (config.mac.version_info.version.empty() ? "1.0.0" : config.mac.version_info.version) << "</string>\n";
         plist << "    <key>CFBundlePackageType</key>\n";
         plist << "    <string>APPL</string>\n";
         plist << "    <key>CFBundleSignature</key>\n";

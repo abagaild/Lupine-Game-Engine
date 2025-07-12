@@ -4,6 +4,7 @@
 #include <vector>
 #include <memory>
 #include <functional>
+#include <filesystem>
 #include "lupine/core/Project.h"
 
 namespace Lupine {
@@ -14,6 +15,7 @@ namespace Lupine {
 enum class ExportTarget {
     Windows_x64,
     Linux_x64,
+    Mac_x64,
     Web_HTML5
 };
 
@@ -70,7 +72,22 @@ struct ExportConfig {
             std::string confinement = "strict";
         } snap;
     } linux_config;
-    
+
+    struct MacSettings {
+        std::filesystem::path icon_path;
+        std::string bundle_identifier;
+        std::string code_sign_identity;
+        std::string developer_id;
+        std::string minimum_os_version = "10.15";
+        bool notarize = false;
+        bool code_sign = false;
+        bool create_dmg = true;
+        struct {
+            std::string version = "1.0.0";
+            std::string build = "1";
+        } version_info;
+    } mac;
+
     struct WebSettings {
         std::string canvas_size = "1920x1080";
         bool enable_threads = false;

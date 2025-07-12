@@ -1,4 +1,6 @@
 #include "WebScriptBridge.h"
+
+#ifdef __EMSCRIPTEN__
 #include <emscripten.h>
 #include <emscripten/bind.h>
 #include <iostream>
@@ -257,3 +259,5 @@ int lupine_is_python_available() {
 }
 
 } // extern "C"
+
+#endif // __EMSCRIPTEN__

@@ -21,7 +21,7 @@ public:
     
     ExportTarget GetTarget() const override { return ExportTarget::Mac_x64; }
     bool IsAvailable() const override;
-    std::string GetAvailabilityError() const override;
+    std::string GetAvailabilityError() const;
     std::string GetName() const override { return "Mac x64 (App Bundle)"; }
 
 private:

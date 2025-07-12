@@ -1,7 +1,9 @@
+#ifdef __EMSCRIPTEN__
+
 #include "lupine/core/Engine.h"
 #include "lupine/core/Project.h"
 #include "lupine/core/Scene.h"
-#include "lupine/core/ComponentRegistry.h"
+#include "lupine/core/ComponentRegistration.h"
 #include "lupine/assets/AssetBundleReader.h"
 #include <emscripten.h>
 #include <emscripten/html5.h>
@@ -236,3 +238,5 @@ int main(int argc, char* argv[]) {
     
     return lupine_main();
 }
+
+#endif // __EMSCRIPTEN__

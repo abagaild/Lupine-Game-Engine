@@ -429,7 +429,7 @@ bool WindowsExporter::SetExecutableIcon(const std::filesystem::path& executable_
     icon_file.close();
 
     // Update the icon resource (ID 1 is typically the main application icon)
-    BOOL result = UpdateResourceA(hUpdate, RT_ICON, MAKEINTRESOURCEA(1),
+    BOOL result = UpdateResourceW(hUpdate, RT_ICON, MAKEINTRESOURCEW(1),
                                  MAKELANGID(LANG_NEUTRAL, SUBLANG_NEUTRAL),
                                  icon_data.data(), static_cast<DWORD>(file_size));
 

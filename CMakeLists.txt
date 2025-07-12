@@ -119,15 +119,27 @@ endif()
 if(LUPINE_ENABLE_EDITOR)
   # Platform-specific Qt paths
   if(WIN32)
+    # Check for downloaded Qt first
+    set(QT_DOWNLOADED_DIR "${QT_DIR}/6.9.1/msvc2022_64")
     set(QT_STATIC_DIR "${PLATFORM_DIR}/qtbase_x64-windows-static")
-    if(EXISTS "${QT_STATIC_DIR}")
+
+    if(EXISTS "${QT_DOWNLOADED_DIR}")
+      # Use downloaded Qt 6.9.1
+      set(Qt6_DIR "${QT_DOWNLOADED_DIR}/lib/cmake/Qt6")
+      set(QT_HOST_PATH "${QT_DOWNLOADED_DIR}")
+      set(QT_HOST_PATH_CMAKE_DIR "${QT_DOWNLOADED_DIR}/lib/cmake" CACHE PATH "Host Qt CMake directory")
+      message(STATUS "Using downloaded Qt: ${QT_DOWNLOADED_DIR}")
+    elseif(EXISTS "${QT_STATIC_DIR}")
+      # Use precompiled static Qt
       set(Qt6_DIR "${QT_STATIC_DIR}/share/Qt6")
       set(QT_HOST_PATH "${QT_DIR}")
       set(QT_HOST_PATH_CMAKE_DIR "${QT_DIR}/share" CACHE PATH "Host Qt CMake directory")
       add_compile_definitions(QT_STATIC_BUILD)
+      message(STATUS "Using static Qt: ${QT_STATIC_DIR}")
     else()
       # Fallback to vcpkg Qt
       set(Qt6_DIR "${VCPKG_DIR}/installed/${PLATFORM_TRIPLET}/share/Qt6")
+      message(STATUS "Using vcpkg Qt: ${Qt6_DIR}")
     endif()
   elseif(APPLE)
     # Use Homebrew Qt
@@ -389,6 +401,9 @@ message(STATUS "=== Library Configuration ===")
 
 # Add our custom CMake modules to the path
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
+
+# Include Qt6 robust configuration functions
+include(FindQt6Robust)
 
 # Use our custom dependency finder
 find_package(LupineDependencies REQUIRED)
