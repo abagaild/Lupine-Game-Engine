@@ -267,11 +267,8 @@ jobs:
       
     - name: Test CMake configuration
       run: |
-        # Add platform config if available
+        # Test CMake configuration (PlatformConfig.cmake will be included by CMakeLists.txt)
         CMAKE_ARGS="-B test_build -S . -DCMAKE_BUILD_TYPE=Release -DLUPINE_ENABLE_EDITOR=ON -DLUPINE_ENABLE_EXPORT=ON"
-        if [ -f "cmake/PlatformConfig.cmake" ]; then
-          CMAKE_ARGS="$CMAKE_ARGS -C cmake/PlatformConfig.cmake"
-        fi
         echo "CMake command: cmake $CMAKE_ARGS"
         eval "cmake $CMAKE_ARGS"
       shell: bash
