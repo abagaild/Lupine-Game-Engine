@@ -70,6 +70,9 @@ jobs:
         # Install Chocolatey packages
         choco install cmake git ninja -y
 
+        # Install Python packages needed for aqtinstall
+        python -m pip install --user --upgrade pip
+
         # Ensure Visual Studio is available
         Write-Host "Visual Studio installation check..."
         if (Get-Command "cl.exe" -ErrorAction SilentlyContinue) {
@@ -116,13 +119,12 @@ jobs:
           zlib1g-dev libssl-dev libsqlite3-dev \
           libogg-dev libvorbis-dev libflac-dev libopus-dev \
           libx11-dev libxext-dev libxrender-dev libgl1-mesa-dev \
-          libasound2-dev libpulse-dev || echo "Some packages failed to install, continuing..."
+          libasound2-dev libpulse-dev libglm-dev || echo "Some packages failed to install, continuing..."
 
-        # Try to install Qt6 for editor (fallback to Qt5 if needed)
-        if ! sudo apt-get install -y qt6-base-dev qt6-tools-dev qt6-tools-dev-tools; then
-          echo "Qt6 installation failed, trying Qt5..."
-          sudo apt-get install -y qtbase5-dev qttools5-dev qttools5-dev-tools || echo "Qt installation failed, continuing without Qt..."
-        fi
+        # Install Python packages needed for aqtinstall
+        python3 -m pip install --user --upgrade pip
+
+        # Qt will be handled by the setup script using static installation
 
         # Install virtual display for testing
         sudo apt-get install -y xvfb
@@ -164,6 +166,9 @@ jobs:
 
         # Install core dependencies
         brew install cmake ninja pkg-config python3
+
+        # Install Python packages needed for aqtinstall
+        python3 -m pip install --user --upgrade pip
 
         # Install development libraries
         brew install \
@@ -223,17 +228,16 @@ jobs:
           CMAKE_ARGS="$CMAKE_ARGS -DCMAKE_OSX_DEPLOYMENT_TARGET=10.15"
         fi
 
-        # Add platform config if available
+        # Platform config will be included automatically by CMakeLists.txt
         if [ -f "cmake/PlatformConfig.cmake" ]; then
-          CMAKE_ARGS="$CMAKE_ARGS -C cmake/PlatformConfig.cmake"
-          echo "✅ Using platform config: cmake/PlatformConfig.cmake"
+          echo "[OK] Platform config available: cmake/PlatformConfig.cmake"
         else
-          echo "⚠️  Platform config not found, using default configuration"
+          echo "[WARN] Platform config not found, using default configuration"
         fi
 
         echo "CMake command: cmake $CMAKE_ARGS"
         if ! eval "cmake $CMAKE_ARGS"; then
-          echo "❌ CMake configuration failed!"
+          echo "[ERROR] CMake configuration failed!"
           echo "Checking for CMake error logs..."
           if [ -f "build/CMakeFiles/CMakeError.log" ]; then
             echo "=== CMakeError.log ==="
@@ -251,13 +255,13 @@ jobs:
       run: |
         echo "=== Building Project ==="
         if ! cmake --build build --config ${{ matrix.build_type }} --parallel; then
-          echo "❌ Build failed!"
+          echo "[ERROR] Build failed!"
           echo "Checking build directory contents..."
           ls -la build/ || true
           ls -la build/bin/ || true
           exit 1
         fi
-        echo "✅ Build completed successfully"
+        echo "[OK] Build completed successfully"
       shell: bash
       
     - name: Verify build outputs
@@ -272,19 +276,19 @@ jobs:
         
         # Check if runtime exists
         if [ -f "build/bin/lupine-runtime${EXE_EXT}" ]; then
-          echo "✓ lupine-runtime found"
+          echo "[OK] lupine-runtime found"
           ls -la "build/bin/lupine-runtime${EXE_EXT}"
         else
-          echo "✗ lupine-runtime not found"
+          echo "[ERROR] lupine-runtime not found"
           exit 1
         fi
-        
+
         # Check if editor exists
         if [ -f "build/bin/lupine-editor${EXE_EXT}" ]; then
-          echo "✓ lupine-editor found"
+          echo "[OK] lupine-editor found"
           ls -la "build/bin/lupine-editor${EXE_EXT}"
         else
-          echo "✗ lupine-editor not found"
+          echo "[ERROR] lupine-editor not found"
           exit 1
         fi
         
@@ -314,11 +318,11 @@ jobs:
 
         # First try with --help flag
         if $TIMEOUT_CMD 25s ./build/bin/lupine-runtime${EXE_EXT} --help 2>/dev/null; then
-          echo "✓ Runtime responds to --help"
+          echo "[OK] Runtime responds to --help"
         elif $TIMEOUT_CMD 25s ./build/bin/lupine-runtime${EXE_EXT} --version 2>/dev/null; then
-          echo "✓ Runtime responds to --version"
+          echo "[OK] Runtime responds to --version"
         else
-          echo "⚠ Runtime doesn't respond to standard flags, testing basic execution..."
+          echo "[WARN] Runtime doesn't respond to standard flags, testing basic execution..."
           # Just try to run it briefly
           $TIMEOUT_CMD 25s ./build/bin/lupine-runtime${EXE_EXT} 2>/dev/null || echo "Runtime executed (may have exited normally)"
         fi
@@ -358,11 +362,11 @@ jobs:
 
         # First try with --help flag
         if $TIMEOUT_CMD 25s ./build/bin/lupine-editor${EXE_EXT} --help 2>/dev/null; then
-          echo "✓ Editor responds to --help"
+          echo "[OK] Editor responds to --help"
         elif $TIMEOUT_CMD 25s ./build/bin/lupine-editor${EXE_EXT} --version 2>/dev/null; then
-          echo "✓ Editor responds to --version"
+          echo "[OK] Editor responds to --version"
         else
-          echo "⚠ Editor doesn't respond to standard flags, testing basic execution..."
+          echo "[WARN] Editor doesn't respond to standard flags, testing basic execution..."
           # Just try to run it briefly
           $TIMEOUT_CMD 25s ./build/bin/lupine-editor${EXE_EXT} 2>/dev/null || echo "Editor executed (may have exited normally)"
         fi
@@ -407,8 +411,8 @@ jobs:
         echo "macOS ARM64: ${{ needs.build-and-test.result }}"
         
         if [ "${{ needs.build-and-test.result }}" = "success" ]; then
-          echo "✅ All builds completed successfully!"
+          echo "[OK] All builds completed successfully!"
         else
-          echo "❌ Some builds failed. Check the individual job logs."
+          echo "[ERROR] Some builds failed. Check the individual job logs."
           exit 1
         fi
