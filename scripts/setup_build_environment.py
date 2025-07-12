@@ -85,7 +85,7 @@ class BuildEnvironmentSetup:
                 return {
                     "system": "macos",
                     "platform_dir": "Mac-OSX",
-                    "arch": "x64", 
+                    "arch": "x86_64",  # Use proper macOS architecture name
                     "triplet": "x64-osx",
                     "package_manager": "brew",
                     "lib_ext": ".a",
@@ -212,16 +212,22 @@ class BuildEnvironmentSetup:
         # Enable binary caching for faster builds
         self._setup_vcpkg_binary_caching(vcpkg_dir)
 
-        # Minimal core dependencies for faster setup
+        # Essential dependencies for basic functionality
         essential_dependencies = [
-            'sdl2', 'sdl2-image', 'sdl2-ttf', 'sdl2-mixer',
-            'glad', 'glm', 'assimp', 'bullet3', 'box2d',
-            'lua', 'yaml-cpp', 'spdlog', 'nlohmann-json',
-            'libpng', 'zlib', 'openssl'
+            'sdl2', 'glm', 'nlohmann-json', 'glad', 'lua',
+            'pybind11'  # For Python scripting support
         ]
 
+        # Install static Qt separately if needed
         if not self.no_qt:
-            essential_dependencies.append('qtbase')
+            qt_dir = self.thirdparty_dir / "Qt"
+            if not self._install_static_qt_windows(qt_dir):
+                print("Static Qt installation failed, trying vcpkg as fallback...")
+                try:
+                    self._run_command([str(vcpkg_exe), 'install', 'qtbase:' + triplet])
+                    essential_dependencies.append('qtbase')
+                except:
+                    print("Warning: Both static and vcpkg Qt installation failed")
 
         # Install essential dependencies in parallel
         print("Installing essential dependencies...")
@@ -265,7 +271,9 @@ class BuildEnvironmentSetup:
             'sdl2', 'sdl2_image', 'sdl2_ttf', 'sdl2_mixer',
             'assimp', 'bullet', 'lua', 'yaml-cpp', 'spdlog',
             'libpng', 'jpeg', 'freetype', 'zlib', 'openssl',
-            'glm'  # OpenGL Mathematics library
+            'glm',  # OpenGL Mathematics library
+            'nlohmann-json',  # JSON library
+            'pybind11'  # Python bindings
         ]
 
         # Audio dependencies
@@ -280,10 +288,7 @@ class BuildEnvironmentSetup:
 
         all_dependencies = core_dependencies + audio_dependencies + additional_dependencies
 
-        if not self.no_qt:
-            all_dependencies.append('qt6')
-
-        # Install dependencies with error handling
+        # Install dependencies with error handling (excluding Qt - handled separately)
         failed_deps = []
         for dep in all_dependencies:
             print(f"Installing {dep}...")
@@ -298,6 +303,17 @@ class BuildEnvironmentSetup:
 
         # Install Python packages
         self._install_python_dependencies()
+
+        # Install static Qt separately if needed
+        if not self.no_qt:
+            qt_dir = self.thirdparty_dir / "Qt"
+            if not self._install_static_qt_macos(qt_dir):
+                print("Static Qt installation failed, trying Homebrew as fallback...")
+                try:
+                    self._run_command(['brew', 'install', 'qt6'])
+                    print("[OK] Homebrew Qt6 installed as fallback")
+                except:
+                    print("Warning: Both static and Homebrew Qt installation failed")
 
     def _install_linux_dependencies(self):
         """Install Linux dependencies using apt (Ubuntu/Debian)."""
@@ -318,7 +334,8 @@ class BuildEnvironmentSetup:
             'libspdlog-dev', 'libpng-dev', 'libjpeg-dev', 'libfreetype-dev',
             'zlib1g-dev', 'libssl-dev', 'libsqlite3-dev', 'libpugixml-dev',
             'libogg-dev', 'libvorbis-dev', 'libflac-dev', 'libopus-dev',
-            'libmpg123-dev', 'libsndfile1-dev', 'libwavpack-dev'
+            'libmpg123-dev', 'libsndfile1-dev', 'libwavpack-dev',
+            'nlohmann-json3-dev', 'pybind11-dev', 'libglad-dev'  # Additional libraries
         ]
 
         # Additional development libraries
@@ -328,12 +345,8 @@ class BuildEnvironmentSetup:
             'libasound2-dev', 'libpulse-dev', 'libglfw3-dev', 'libglm-dev'
         ]
 
+        # Qt will be handled separately via static installation
         qt_deps = []
-        if not self.no_qt:
-            qt_deps = [
-                'qt6-base-dev', 'qt6-tools-dev', 'qt6-tools-dev-tools',
-                'qt6-opengl-dev', 'libqt6opengl6-dev'
-            ]
 
         all_deps = build_deps + runtime_deps + dev_deps + qt_deps
 
@@ -355,6 +368,10 @@ class BuildEnvironmentSetup:
 
         # Install Python packages
         self._install_python_dependencies()
+
+        # Install static Qt6 if not using --no-qt
+        if not self.no_qt:
+            self._install_static_qt_linux()
 
     def _install_python_dependencies(self):
         """Install Python packages needed for the build system."""
@@ -389,6 +406,149 @@ class BuildEnvironmentSetup:
                     print(f"Successfully installed {package} (system-wide)")
                 except:
                     print(f"Warning: Failed to install Python package {package} (both user and system-wide)")
+
+    def _install_static_qt_linux(self):
+        """Install static Qt6 on Linux using aqtinstall."""
+        print("Installing static Qt6 for Linux...")
+
+        qt_dir = self.thirdparty_dir / "Qt"
+        qt_version = "6.9.0"  # Use Qt 6.9.0 which should be available
+        qt_arch = "gcc_64"
+        qt_modules = ["qtbase", "qttools", "qtdeclarative"]
+
+        # Check if Qt is already installed
+        qt_install_dir = qt_dir / qt_version / qt_arch
+        if qt_install_dir.exists() and not self.force:
+            print(f"Static Qt6 already installed at {qt_install_dir}")
+            return
+
+        try:
+            # Install aqtinstall if not present
+            if not shutil.which("aqt"):
+                print("Installing aqtinstall...")
+                self._run_command([sys.executable, "-m", "pip", "install", "--user", "aqtinstall"])
+            else:
+                print("aqtinstall already present")
+
+            # Create destination directory
+            qt_dir.mkdir(parents=True, exist_ok=True)
+
+            # Download and install static Qt (base installation without extra modules)
+            cmd = [
+                "aqt", "install-qt", "linux", "desktop",
+                qt_version, qt_arch,
+                "--outputdir", str(qt_dir)
+            ]
+
+            print(f"Downloading static Qt {qt_version}...")
+            print(f"Command: {' '.join(cmd)}")
+            self._run_command(cmd)
+
+            print(f"[OK] Static Qt {qt_version} installed in {qt_dir}")
+
+        except Exception as e:
+            print(f"[WARN] Failed to install static Qt6: {e}")
+            print("Falling back to system Qt packages...")
+            # Fall back to system packages if static installation fails
+            try:
+                qt_deps = [
+                    'qtbase6-dev', 'qttools6-dev', 'qttools6-dev-tools',
+                    'qtdeclarative6-dev', 'libqt6opengl6-dev'
+                ]
+                self._run_command(['sudo', 'apt', 'install', '-y'] + qt_deps)
+                print("[OK] System Qt6 packages installed as fallback")
+            except:
+                print("[WARN] Both static and system Qt6 installation failed")
+
+    def _install_static_qt_windows(self, qt_dir: Path) -> bool:
+        """Install static Qt6 on Windows using aqtinstall."""
+        print("Installing static Qt6 for Windows...")
+
+        qt_version = "6.9.0"  # Use Qt 6.9.0 which should be available
+        qt_arch = "win64_msvc2022_64"
+        qt_modules = ["qtbase", "qttools", "qtdeclarative"]
+
+        # Check if Qt is already installed
+        qt_install_dir = qt_dir / qt_version / qt_arch
+        if qt_install_dir.exists() and not self.force:
+            print(f"Static Qt6 already installed at {qt_install_dir}")
+            return True
+
+        try:
+            # Install aqtinstall if not present
+            if not shutil.which("aqt"):
+                print("Installing aqtinstall...")
+                self._run_command([sys.executable, "-m", "pip", "install", "--user", "aqtinstall"])
+            else:
+                print("aqtinstall already present")
+
+            # Create destination directory
+            qt_dir.mkdir(parents=True, exist_ok=True)
+
+            # Download and install static Qt (base installation without extra modules)
+            cmd = [
+                "aqt", "install-qt", "windows", "desktop",
+                qt_version, qt_arch,
+                "--outputdir", str(qt_dir)
+            ]
+
+            print(f"Downloading static Qt {qt_version} for Windows...")
+            print(f"Command: {' '.join(cmd)}")
+            self._run_command(cmd)
+
+            print(f"[OK] Static Qt {qt_version} installed in {qt_dir}")
+            return True
+
+        except Exception as e:
+            print(f"[WARN] Failed to install static Qt6 for Windows: {e}")
+            return False
+
+    def _install_static_qt_macos(self, qt_dir: Path) -> bool:
+        """Install static Qt6 on macOS using aqtinstall."""
+        print("Installing static Qt6 for macOS...")
+
+        qt_version = "6.9.0"  # Use Qt 6.9.0 which should be available
+        # Detect architecture
+        if self.system_info['arch'] == "arm64":
+            qt_arch = "clang_64"  # Apple Silicon
+        else:
+            qt_arch = "clang_64"  # Intel
+        qt_modules = ["qtbase", "qttools", "qtdeclarative"]
+
+        # Check if Qt is already installed
+        qt_install_dir = qt_dir / qt_version / qt_arch
+        if qt_install_dir.exists() and not self.force:
+            print(f"Static Qt6 already installed at {qt_install_dir}")
+            return True
+
+        try:
+            # Install aqtinstall if not present
+            if not shutil.which("aqt"):
+                print("Installing aqtinstall...")
+                self._run_command([sys.executable, "-m", "pip", "install", "--user", "aqtinstall"])
+            else:
+                print("aqtinstall already present")
+
+            # Create destination directory
+            qt_dir.mkdir(parents=True, exist_ok=True)
+
+            # Download and install static Qt (base installation without extra modules)
+            cmd = [
+                "aqt", "install-qt", "mac", "desktop",
+                qt_version, qt_arch,
+                "--outputdir", str(qt_dir)
+            ]
+
+            print(f"Downloading static Qt {qt_version} for macOS...")
+            print(f"Command: {' '.join(cmd)}")
+            self._run_command(cmd)
+
+            print(f"[OK] Static Qt {qt_version} installed in {qt_dir}")
+            return True
+
+        except Exception as e:
+            print(f"[WARN] Failed to install static Qt6 for macOS: {e}")
+            return False
 
     def _download_precompiled_libraries(self, base_url: str, archive_name: str, local_path: Path) -> bool:
         """Download and extract precompiled libraries if available."""
@@ -582,30 +742,40 @@ class BuildEnvironmentSetup:
             self._setup_qt_linux(qt_dir)
 
     def _setup_qt_windows(self, qt_dir: Path):
-        """Set up Qt on Windows."""
-        # Qt should be installed via vcpkg, create symlink structure
+        """Set up Qt on Windows using static installation."""
+        # Try static Qt installation first
+        if self._install_static_qt_windows(qt_dir):
+            return
+
+        # Fall back to vcpkg if static installation fails
+        print("Falling back to vcpkg Qt installation...")
         vcpkg_dir = self.thirdparty_dir / "vcpkg"
         vcpkg_qt = vcpkg_dir / "installed" / self.system_info['triplet']
-        
+
         if vcpkg_qt.exists():
             if not qt_dir.exists():
                 qt_dir.mkdir(parents=True)
-            
+
             # Create expected directory structure
             (qt_dir / "bin").mkdir(exist_ok=True)
             (qt_dir / "lib").mkdir(exist_ok=True)
             (qt_dir / "include").mkdir(exist_ok=True)
             (qt_dir / "share").mkdir(exist_ok=True)
-            
+
             print("Qt installed via vcpkg")
         else:
             print("Warning: Qt not found in vcpkg installation")
 
     def _setup_qt_macos(self, qt_dir: Path):
-        """Set up Qt on macOS."""
-        # Qt should be installed via Homebrew
+        """Set up Qt on macOS using static installation."""
+        # Try static Qt installation first
+        if self._install_static_qt_macos(qt_dir):
+            return
+
+        # Fall back to Homebrew if static installation fails
+        print("Falling back to Homebrew Qt installation...")
         brew_qt = Path('/opt/homebrew/opt/qt6') if Path('/opt/homebrew').exists() else Path('/usr/local/opt/qt6')
-        
+
         if brew_qt.exists():
             if not qt_dir.exists():
                 qt_dir.symlink_to(brew_qt)
@@ -615,16 +785,27 @@ class BuildEnvironmentSetup:
 
     def _setup_qt_linux(self, qt_dir: Path):
         """Set up Qt on Linux."""
-        # Qt should be installed via apt, find system Qt
+        # First check if we have static Qt installed via aqtinstall
+        static_qt_dir = qt_dir / "6.9.0" / "gcc_64"
+        if static_qt_dir.exists():
+            print(f"Using static Qt6 from: {static_qt_dir}")
+            # Create a symlink for easier access
+            qt_link = qt_dir / "current"
+            if qt_link.exists():
+                qt_link.unlink()
+            qt_link.symlink_to(static_qt_dir)
+            return
+
+        # Fall back to system Qt
         qt_paths = ['/usr/lib/x86_64-linux-gnu/qt6', '/usr/lib/qt6', '/usr/share/qt6']
-        
+
         for qt_path in qt_paths:
             if Path(qt_path).exists():
                 if not qt_dir.exists():
                     qt_dir.symlink_to(qt_path)
                 print(f"Qt linked from system: {qt_path}")
                 return
-                
+
         print("Warning: Qt not found in system installation")
 
     def setup_emscripten(self):
@@ -742,13 +923,59 @@ set(LINUX_SYSTEM_LIBS
 set(QT_DIR "${THIRDPARTY_DIR}/Qt")
 list(APPEND CMAKE_PREFIX_PATH "${QT_DIR}")
 
-# Qt static linking setup
+# Qt static linking setup for all platforms
+set(QT_VERSION "6.9.0")
+
 if(WIN32)
-    set(QT_STATIC_DIR "${PLATFORM_DIR}/qtbase_x64-windows-static")
+    # Windows static Qt setup
+    set(QT_STATIC_DIR "${QT_DIR}/${QT_VERSION}/win64_msvc2022_64")
     if(EXISTS "${QT_STATIC_DIR}")
-        set(Qt6_DIR "${QT_STATIC_DIR}/share/Qt6")
+        set(Qt6_DIR "${QT_STATIC_DIR}/lib/cmake/Qt6")
         list(APPEND CMAKE_PREFIX_PATH "${QT_STATIC_DIR}")
         add_compile_definitions(QT_STATIC_BUILD)
+        message(STATUS "Using static Qt6 from: ${QT_STATIC_DIR}")
+    else()
+        # Fall back to vcpkg Qt
+        set(QT_VCPKG_DIR "${PLATFORM_DIR}/qtbase_x64-windows-static")
+        if(EXISTS "${QT_VCPKG_DIR}")
+            set(Qt6_DIR "${QT_VCPKG_DIR}/share/Qt6")
+            list(APPEND CMAKE_PREFIX_PATH "${QT_VCPKG_DIR}")
+            add_compile_definitions(QT_STATIC_BUILD)
+            message(STATUS "Using vcpkg Qt6 from: ${QT_VCPKG_DIR}")
+        endif()
+    endif()
+elseif(APPLE)
+    # macOS static Qt setup
+    set(QT_STATIC_DIR "${QT_DIR}/${QT_VERSION}/clang_64")
+    if(EXISTS "${QT_STATIC_DIR}")
+        set(Qt6_DIR "${QT_STATIC_DIR}/lib/cmake/Qt6")
+        list(APPEND CMAKE_PREFIX_PATH "${QT_STATIC_DIR}")
+        message(STATUS "Using static Qt6 from: ${QT_STATIC_DIR}")
+    else()
+        # Fall back to Homebrew Qt
+        set(QT_BREW_DIR "/opt/homebrew/opt/qt6")
+        if(NOT EXISTS "${QT_BREW_DIR}")
+            set(QT_BREW_DIR "/usr/local/opt/qt6")
+        endif()
+        if(EXISTS "${QT_BREW_DIR}")
+            list(APPEND CMAKE_PREFIX_PATH "${QT_BREW_DIR}")
+            message(STATUS "Using Homebrew Qt6 from: ${QT_BREW_DIR}")
+        endif()
+    endif()
+elseif(UNIX AND NOT APPLE)
+    # Linux static Qt setup
+    set(QT_STATIC_DIR "${QT_DIR}/${QT_VERSION}/gcc_64")
+    if(EXISTS "${QT_STATIC_DIR}")
+        set(Qt6_DIR "${QT_STATIC_DIR}/lib/cmake/Qt6")
+        list(APPEND CMAKE_PREFIX_PATH "${QT_STATIC_DIR}")
+        message(STATUS "Using static Qt6 from: ${QT_STATIC_DIR}")
+    else()
+        # Fall back to current symlink or system Qt
+        set(QT_CURRENT_DIR "${QT_DIR}/current")
+        if(EXISTS "${QT_CURRENT_DIR}")
+            list(APPEND CMAKE_PREFIX_PATH "${QT_CURRENT_DIR}")
+            message(STATUS "Using Qt6 from: ${QT_CURRENT_DIR}")
+        endif()
     endif()
 endif()
 """
