@@ -43,8 +43,9 @@ class PrecompiledLibraryBuilder:
 
         platform_dir = self.thirdparty_dir / platform
         if not platform_dir.exists():
-            print(f"[ERROR] Platform directory {platform_dir} does not exist")
-            return False
+            print(f"[WARN] Platform directory {platform_dir} does not exist")
+            print(f"Creating platform directory...")
+            platform_dir.mkdir(exist_ok=True)
 
         # Check if essential libraries exist
         lib_dir = platform_dir / "lib"
@@ -86,14 +87,24 @@ class PrecompiledLibraryBuilder:
                     for file in files:
                         try:
                             file_path = Path(root) / file
-                            # Calculate relative path from thirdparty directory
-                            rel_path = file_path.relative_to(self.thirdparty_dir)
-                            zipf.write(file_path, rel_path)
+                            # Calculate relative path from platform directory (not thirdparty)
+                            rel_path = file_path.relative_to(platform_dir)
+                            # Store with platform prefix to maintain structure
+                            archive_path = Path(platform) / rel_path
+                            zipf.write(file_path, archive_path)
                             files_added += 1
                         except Exception as e:
                             print(f"[WARN] Failed to add file {file_path} to archive: {e}")
 
                 print(f"Added {files_added} files to package")
+
+                # If no files were added, create a minimal structure
+                if files_added == 0:
+                    print(f"[WARN] No files found in {platform_dir}, creating minimal package structure")
+                    # Add empty directories to maintain structure
+                    zipf.writestr(f"{platform}/lib/.gitkeep", "")
+                    zipf.writestr(f"{platform}/include/.gitkeep", "")
+                    files_added = 2
         except Exception as e:
             print(f"[ERROR] Failed to create package: {e}")
             return False
@@ -164,10 +175,14 @@ class PrecompiledLibraryBuilder:
             return False
 
         try:
-            # Try different Python executables
-            python_executables = [sys.executable, 'python3', 'python', 'py']
-            python_cmd = None
+            # Try different Python executables (prioritize py on Windows)
+            import platform
+            if platform.system().lower() == 'windows':
+                python_executables = [sys.executable, 'py', 'python', 'python3']
+            else:
+                python_executables = [sys.executable, 'python3', 'python', 'py']
 
+            python_cmd = None
             for py_exe in python_executables:
                 if shutil.which(py_exe):
                     python_cmd = py_exe

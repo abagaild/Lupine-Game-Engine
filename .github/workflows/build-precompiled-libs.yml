@@ -1,0 +1,234 @@
+name: Build Precompiled Libraries
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'scripts/build_precompiled_libs.py'
+      - 'scripts/setup_build_environment.py'
+      - 'CMakeLists.txt'
+      - 'cmake/**'
+  workflow_dispatch:
+    inputs:
+      upload_to_releases:
+        description: 'Upload packages to GitHub releases'
+        required: false
+        default: 'true'
+        type: boolean
+      tag_name:
+        description: 'Release tag name (auto-generated if empty)'
+        required: false
+        type: string
+
+jobs:
+  build-precompiled-libs:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: "Windows x64"
+            os: windows-latest
+            platform: Windows
+            triplet: x64-windows-static
+            
+          - name: "Linux x64"
+            os: ubuntu-latest
+            platform: Linux
+            triplet: x64-linux
+            
+          - name: "macOS x64"
+            os: macos-13
+            platform: Mac-OSX
+            triplet: x64-osx
+            
+          - name: "macOS ARM64"
+            os: macos-latest
+            platform: Mac-ARM64
+            triplet: arm64-osx
+
+    runs-on: ${{ matrix.os }}
+    name: Build ${{ matrix.name }} Libraries
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Setup Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Cache dependencies
+      uses: actions/cache@v4
+      with:
+        path: |
+          thirdparty
+          ~/.cache/pip
+          ~/vcpkg
+          /usr/local/Homebrew
+        key: precompiled-${{ runner.os }}-${{ matrix.triplet }}-${{ hashFiles('scripts/setup_build_environment.py') }}
+        restore-keys: |
+          precompiled-${{ runner.os }}-${{ matrix.triplet }}-
+          precompiled-${{ runner.os }}-
+
+    - name: Setup Windows dependencies
+      if: matrix.platform == 'Windows'
+      run: |
+        echo "=== Setting up Windows dependencies ==="
+        
+        # Install vcpkg if not cached
+        if (!(Test-Path "thirdparty\vcpkg\vcpkg.exe")) {
+          Write-Host "Installing vcpkg..."
+          git clone https://github.com/Microsoft/vcpkg.git thirdparty\vcpkg
+          .\thirdparty\vcpkg\bootstrap-vcpkg.bat
+        }
+        
+        # Install essential build tools
+        choco install cmake ninja -y
+        
+        Write-Host "Windows setup completed"
+      shell: powershell
+
+    - name: Setup Linux dependencies
+      if: matrix.platform == 'Linux'
+      run: |
+        echo "=== Setting up Linux dependencies ==="
+        
+        # Update package lists
+        sudo apt-get update
+        
+        # Install build essentials
+        sudo apt-get install -y \
+          build-essential cmake ninja-build pkg-config \
+          libgl1-mesa-dev libglu1-mesa-dev \
+          libasound2-dev libpulse-dev \
+          libudev-dev libdbus-1-dev \
+          libxi-dev libxext-dev libxrandr-dev libxinerama-dev libxcursor-dev \
+          libxss-dev libxxf86vm-dev \
+          libgtk-3-dev
+        
+        echo "Linux setup completed"
+
+    - name: Setup macOS dependencies
+      if: matrix.platform == 'Mac-OSX' || matrix.platform == 'Mac-ARM64'
+      run: |
+        echo "=== Setting up macOS dependencies ==="
+        
+        # Update Homebrew
+        brew update
+        
+        # Install build tools
+        brew install cmake ninja pkg-config
+        
+        echo "macOS setup completed"
+
+    - name: Build libraries for platform
+      run: |
+        echo "=== Building libraries for ${{ matrix.platform }} ==="
+        
+        # Use the correct Python command for each platform
+        if [ "${{ matrix.platform }}" = "Windows" ]; then
+          PYTHON_CMD="py"
+        else
+          PYTHON_CMD="python3"
+        fi
+        
+        # Run the build script for this specific platform
+        $PYTHON_CMD scripts/build_precompiled_libs.py --platform "${{ matrix.platform }}"
+        
+        echo "Build completed for ${{ matrix.platform }}"
+      shell: bash
+
+    - name: Verify package creation
+      run: |
+        echo "=== Verifying package creation ==="
+        
+        PACKAGE_NAME="lupine-libs-${{ matrix.triplet }}.zip"
+        PACKAGE_PATH="precompiled_packages/$PACKAGE_NAME"
+        
+        if [ -f "$PACKAGE_PATH" ]; then
+          echo "[OK] Package created: $PACKAGE_PATH"
+          echo "Package size: $(du -h "$PACKAGE_PATH" | cut -f1)"
+          
+          # Check if package has content
+          if [ -s "$PACKAGE_PATH" ]; then
+            echo "[OK] Package has content"
+          else
+            echo "[ERROR] Package is empty!"
+            exit 1
+          fi
+        else
+          echo "[ERROR] Package not found: $PACKAGE_PATH"
+          echo "Available files in precompiled_packages:"
+          ls -la precompiled_packages/ || echo "Directory doesn't exist"
+          exit 1
+        fi
+      shell: bash
+
+    - name: Upload platform package
+      uses: actions/upload-artifact@v4
+      with:
+        name: precompiled-libs-${{ matrix.triplet }}
+        path: |
+          precompiled_packages/lupine-libs-${{ matrix.triplet }}.zip
+          precompiled_packages/lupine-libs-${{ matrix.triplet }}.json
+        retention-days: 30
+
+  # Collect all packages and upload to releases
+  upload-to-releases:
+    needs: build-precompiled-libs
+    runs-on: ubuntu-latest
+    if: success() && (github.event.inputs.upload_to_releases == 'true' || github.event.inputs.upload_to_releases == '')
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Setup Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Download all artifacts
+      uses: actions/download-artifact@v4
+      with:
+        path: artifacts
+
+    - name: Organize packages
+      run: |
+        echo "=== Organizing packages ==="
+        mkdir -p precompiled_packages
+        
+        # Move all packages to the expected directory
+        find artifacts -name "*.zip" -exec cp {} precompiled_packages/ \;
+        find artifacts -name "*.json" -exec cp {} precompiled_packages/ \;
+        
+        echo "Available packages:"
+        ls -la precompiled_packages/
+
+    - name: Install GitHub CLI
+      run: |
+        curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
+        echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
+        sudo apt update
+        sudo apt install gh
+
+    - name: Upload to GitHub releases
+      run: |
+        echo "=== Uploading to GitHub Releases ==="
+        
+        # Determine tag name
+        if [ -n "${{ github.event.inputs.tag_name }}" ]; then
+          TAG="${{ github.event.inputs.tag_name }}"
+        else
+          TAG="precompiled-$(date +%Y%m%d-%H%M%S)"
+        fi
+        
+        echo "Using tag: $TAG"
+        
+        # Create release and upload packages
+        python3 scripts/build_precompiled_libs.py --upload --tag "$TAG" --token "${{ secrets.GITHUB_TOKEN }}"
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

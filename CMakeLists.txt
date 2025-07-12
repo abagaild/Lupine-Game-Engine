@@ -224,15 +224,50 @@ if(LUPINE_ENABLE_EDITOR)
     find_package(Qt6OpenGL QUIET)
     find_package(Qt6OpenGLWidgets QUIET)
 
-    # Find Qt tools
-    find_program(Qt6_MOC_EXECUTABLE NAMES moc moc.exe)
-    find_program(Qt6_UIC_EXECUTABLE NAMES uic uic.exe)
-    find_program(Qt6_RCC_EXECUTABLE NAMES rcc rcc.exe)
+    # Find Qt tools - check thirdparty/qt first, then system paths
+    set(QT_TOOLS_DIR "${CMAKE_SOURCE_DIR}/thirdparty/qt")
+
+    # Check for Qt tools in thirdparty/qt directory first
+    if(EXISTS "${QT_TOOLS_DIR}")
+      find_program(Qt6_MOC_EXECUTABLE NAMES moc moc.exe
+                   PATHS "${QT_TOOLS_DIR}/bin" "${QT_TOOLS_DIR}"
+                   NO_DEFAULT_PATH)
+      find_program(Qt6_UIC_EXECUTABLE NAMES uic uic.exe
+                   PATHS "${QT_TOOLS_DIR}/bin" "${QT_TOOLS_DIR}"
+                   NO_DEFAULT_PATH)
+      find_program(Qt6_RCC_EXECUTABLE NAMES rcc rcc.exe
+                   PATHS "${QT_TOOLS_DIR}/bin" "${QT_TOOLS_DIR}"
+                   NO_DEFAULT_PATH)
+
+      if(Qt6_MOC_EXECUTABLE AND Qt6_UIC_EXECUTABLE AND Qt6_RCC_EXECUTABLE)
+        message(STATUS "[OK] Qt6 tools found in thirdparty/qt")
+      endif()
+    endif()
+
+    # If not found in thirdparty, check system paths
+    if(NOT Qt6_MOC_EXECUTABLE OR NOT Qt6_UIC_EXECUTABLE OR NOT Qt6_RCC_EXECUTABLE)
+      find_program(Qt6_MOC_EXECUTABLE NAMES moc moc.exe)
+      find_program(Qt6_UIC_EXECUTABLE NAMES uic uic.exe)
+      find_program(Qt6_RCC_EXECUTABLE NAMES rcc rcc.exe)
+    endif()
 
     if(Qt6_MOC_EXECUTABLE AND Qt6_UIC_EXECUTABLE AND Qt6_RCC_EXECUTABLE)
       message(STATUS "[OK] Qt6 tools found")
+      message(STATUS "  MOC: ${Qt6_MOC_EXECUTABLE}")
+      message(STATUS "  UIC: ${Qt6_UIC_EXECUTABLE}")
+      message(STATUS "  RCC: ${Qt6_RCC_EXECUTABLE}")
     else()
       message(WARNING "[WARN] Some Qt6 tools missing, but continuing...")
+      message(STATUS "To vendor Qt tools, place moc, uic, and rcc executables in thirdparty/qt/bin/")
+      if(NOT Qt6_MOC_EXECUTABLE)
+        message(STATUS "  Missing: moc")
+      endif()
+      if(NOT Qt6_UIC_EXECUTABLE)
+        message(STATUS "  Missing: uic")
+      endif()
+      if(NOT Qt6_RCC_EXECUTABLE)
+        message(STATUS "  Missing: rcc")
+      endif()
     endif()
 
   else()
