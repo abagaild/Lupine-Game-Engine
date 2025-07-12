@@ -180,9 +180,10 @@ class BuildEnvironmentSetup:
         # Enable binary caching for faster builds
         self._setup_vcpkg_binary_caching(vcpkg_dir)
 
-        # Minimal core dependencies for faster setup
+        # Essential dependencies for basic functionality
         essential_dependencies = [
-            'sdl2', 'glm', 'nlohmann-json'
+            'sdl2', 'glm', 'nlohmann-json', 'glad', 'lua',
+            'pybind11'  # For Python scripting support
         ]
 
         # Install static Qt separately if needed
@@ -238,7 +239,9 @@ class BuildEnvironmentSetup:
             'sdl2', 'sdl2_image', 'sdl2_ttf', 'sdl2_mixer',
             'assimp', 'bullet', 'lua', 'yaml-cpp', 'spdlog',
             'libpng', 'jpeg', 'freetype', 'zlib', 'openssl',
-            'glm'  # OpenGL Mathematics library
+            'glm',  # OpenGL Mathematics library
+            'nlohmann-json',  # JSON library
+            'pybind11'  # Python bindings
         ]
 
         # Audio dependencies
@@ -299,7 +302,8 @@ class BuildEnvironmentSetup:
             'libspdlog-dev', 'libpng-dev', 'libjpeg-dev', 'libfreetype-dev',
             'zlib1g-dev', 'libssl-dev', 'libsqlite3-dev', 'libpugixml-dev',
             'libogg-dev', 'libvorbis-dev', 'libflac-dev', 'libopus-dev',
-            'libmpg123-dev', 'libsndfile1-dev', 'libwavpack-dev'
+            'libmpg123-dev', 'libsndfile1-dev', 'libwavpack-dev',
+            'nlohmann-json3-dev', 'pybind11-dev', 'libglad-dev'  # Additional libraries
         ]
 
         # Additional development libraries
@@ -356,7 +360,7 @@ class BuildEnvironmentSetup:
         print("Installing static Qt6 for Linux...")
 
         qt_dir = self.thirdparty_dir / "Qt"
-        qt_version = "6.9.1"
+        qt_version = "6.9.0"  # Use Qt 6.9.0 which should be available
         qt_arch = "gcc_64"
         qt_modules = ["qtbase", "qttools", "qtdeclarative"]
 
@@ -377,12 +381,10 @@ class BuildEnvironmentSetup:
             # Create destination directory
             qt_dir.mkdir(parents=True, exist_ok=True)
 
-            # Download and install static Qt
-            modules_arg = ",".join(qt_modules)
+            # Download and install static Qt (base installation without extra modules)
             cmd = [
                 "aqt", "install-qt", "linux", "desktop",
                 qt_version, qt_arch,
-                "--modules", modules_arg,
                 "--outputdir", str(qt_dir)
             ]
 
@@ -410,7 +412,7 @@ class BuildEnvironmentSetup:
         """Install static Qt6 on Windows using aqtinstall."""
         print("Installing static Qt6 for Windows...")
 
-        qt_version = "6.9.1"
+        qt_version = "6.9.0"  # Use Qt 6.9.0 which should be available
         qt_arch = "win64_msvc2022_64"
         qt_modules = ["qtbase", "qttools", "qtdeclarative"]
 
@@ -431,12 +433,10 @@ class BuildEnvironmentSetup:
             # Create destination directory
             qt_dir.mkdir(parents=True, exist_ok=True)
 
-            # Download and install static Qt
-            modules_arg = ",".join(qt_modules)
+            # Download and install static Qt (base installation without extra modules)
             cmd = [
                 "aqt", "install-qt", "windows", "desktop",
                 qt_version, qt_arch,
-                "--modules", modules_arg,
                 "--outputdir", str(qt_dir)
             ]
 
@@ -455,7 +455,7 @@ class BuildEnvironmentSetup:
         """Install static Qt6 on macOS using aqtinstall."""
         print("Installing static Qt6 for macOS...")
 
-        qt_version = "6.9.1"
+        qt_version = "6.9.0"  # Use Qt 6.9.0 which should be available
         # Detect architecture
         if self.system_info['arch'] == "arm64":
             qt_arch = "clang_64"  # Apple Silicon
@@ -480,12 +480,10 @@ class BuildEnvironmentSetup:
             # Create destination directory
             qt_dir.mkdir(parents=True, exist_ok=True)
 
-            # Download and install static Qt
-            modules_arg = ",".join(qt_modules)
+            # Download and install static Qt (base installation without extra modules)
             cmd = [
                 "aqt", "install-qt", "mac", "desktop",
                 qt_version, qt_arch,
-                "--modules", modules_arg,
                 "--outputdir", str(qt_dir)
             ]
 
@@ -714,7 +712,7 @@ class BuildEnvironmentSetup:
     def _setup_qt_linux(self, qt_dir: Path):
         """Set up Qt on Linux."""
         # First check if we have static Qt installed via aqtinstall
-        static_qt_dir = qt_dir / "6.9.1" / "gcc_64"
+        static_qt_dir = qt_dir / "6.9.0" / "gcc_64"
         if static_qt_dir.exists():
             print(f"Using static Qt6 from: {static_qt_dir}")
             # Create a symlink for easier access
@@ -852,7 +850,7 @@ set(QT_DIR "${THIRDPARTY_DIR}/Qt")
 list(APPEND CMAKE_PREFIX_PATH "${QT_DIR}")
 
 # Qt static linking setup for all platforms
-set(QT_VERSION "6.9.1")
+set(QT_VERSION "6.9.0")
 
 if(WIN32)
     # Windows static Qt setup
