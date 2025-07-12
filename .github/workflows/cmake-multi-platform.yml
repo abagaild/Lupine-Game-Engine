@@ -73,7 +73,7 @@ jobs:
         # Ensure Visual Studio is available
         Write-Host "Visual Studio installation check..."
         if (Get-Command "cl.exe" -ErrorAction SilentlyContinue) {
-          Write-Host "✓ Visual Studio compiler found"
+          Write-Host "Visual Studio compiler found"
         } else {
           Write-Host "Installing Visual Studio Build Tools..."
           choco install visualstudio2022buildtools --package-parameters "--add Microsoft.VisualStudio.Workload.VCTools --add Microsoft.VisualStudio.Component.VC.Tools.x86.x64 --add Microsoft.VisualStudio.Component.Windows10SDK.19041" -y
