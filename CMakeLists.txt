@@ -212,79 +212,20 @@ message(STATUS "Third-party Directory: ${THIRDPARTY_DIR}")
 
 #--- Qt Setup (if enabled) ---
 if(LUPINE_ENABLE_EDITOR)
-  message(STATUS "=== Qt Configuration ===")
+  message(STATUS "=== Qt6 Configuration ===")
 
-  # Simplified Qt configuration to avoid hanging
-  set(CMAKE_FIND_PACKAGE_PREFER_CONFIG ON)
+  # Use the robust Qt6 finder
+  find_and_configure_qt6(COMPONENTS Core Widgets Gui OpenGL OpenGLWidgets)
 
-  # Skip problematic system dependencies that cause hangs
-  set(CMAKE_DISABLE_FIND_PACKAGE_WrapSystemDoubleConversion ON)
-  set(CMAKE_DISABLE_FIND_PACKAGE_WrapSystemHarfbuzz ON)
-  set(CMAKE_DISABLE_FIND_PACKAGE_WrapSystemFreetype ON)
-  set(CMAKE_DISABLE_FIND_PACKAGE_WrapSystemPCRE2 ON)
-  set(CMAKE_DISABLE_FIND_PACKAGE_WrapSystemZLIB ON)
-
-  # Try to find Qt6 with minimal configuration
-  message(STATUS "Searching for Qt6 (simplified configuration)...")
-
-  find_package(Qt6 QUIET COMPONENTS Core Widgets Gui)
-
-  if(Qt6_FOUND)
-    message(STATUS "[OK] Qt6 found successfully")
-
-    # Try to find optional OpenGL components
-    find_package(Qt6OpenGL QUIET)
-    find_package(Qt6OpenGLWidgets QUIET)
-
-    # Find Qt tools - check thirdparty/qt first, then system paths
-    set(QT_TOOLS_DIR "${CMAKE_SOURCE_DIR}/thirdparty/qt")
-
-    # Check for Qt tools in thirdparty/qt directory first
-    if(EXISTS "${QT_TOOLS_DIR}")
-      find_program(Qt6_MOC_EXECUTABLE NAMES moc moc.exe
-                   PATHS "${QT_TOOLS_DIR}/bin" "${QT_TOOLS_DIR}"
-                   NO_DEFAULT_PATH)
-      find_program(Qt6_UIC_EXECUTABLE NAMES uic uic.exe
-                   PATHS "${QT_TOOLS_DIR}/bin" "${QT_TOOLS_DIR}"
-                   NO_DEFAULT_PATH)
-      find_program(Qt6_RCC_EXECUTABLE NAMES rcc rcc.exe
-                   PATHS "${QT_TOOLS_DIR}/bin" "${QT_TOOLS_DIR}"
-                   NO_DEFAULT_PATH)
-
-      if(Qt6_MOC_EXECUTABLE AND Qt6_UIC_EXECUTABLE AND Qt6_RCC_EXECUTABLE)
-        message(STATUS "[OK] Qt6 tools found in thirdparty/qt")
-      endif()
-    endif()
-
-    # If not found in thirdparty, check system paths
-    if(NOT Qt6_MOC_EXECUTABLE OR NOT Qt6_UIC_EXECUTABLE OR NOT Qt6_RCC_EXECUTABLE)
-      find_program(Qt6_MOC_EXECUTABLE NAMES moc moc.exe)
-      find_program(Qt6_UIC_EXECUTABLE NAMES uic uic.exe)
-      find_program(Qt6_RCC_EXECUTABLE NAMES rcc rcc.exe)
-    endif()
-
-    if(Qt6_MOC_EXECUTABLE AND Qt6_UIC_EXECUTABLE AND Qt6_RCC_EXECUTABLE)
-      message(STATUS "[OK] Qt6 tools found")
-      message(STATUS "  MOC: ${Qt6_MOC_EXECUTABLE}")
-      message(STATUS "  UIC: ${Qt6_UIC_EXECUTABLE}")
-      message(STATUS "  RCC: ${Qt6_RCC_EXECUTABLE}")
-    else()
-      message(WARNING "[WARN] Some Qt6 tools missing, but continuing...")
-      message(STATUS "To vendor Qt tools, place moc, uic, and rcc executables in thirdparty/qt/bin/")
-      if(NOT Qt6_MOC_EXECUTABLE)
-        message(STATUS "  Missing: moc")
-      endif()
-      if(NOT Qt6_UIC_EXECUTABLE)
-        message(STATUS "  Missing: uic")
-      endif()
-      if(NOT Qt6_RCC_EXECUTABLE)
-        message(STATUS "  Missing: rcc")
-      endif()
-    endif()
-
-  else()
+  if(NOT Qt6_FOUND)
     message(WARNING "[ERROR] Qt6 not found. Disabling editor build.")
     set(LUPINE_ENABLE_EDITOR OFF)
+  else()
+    message(STATUS "[OK] Qt6 configured successfully")
+    message(STATUS "Found Qt6 components: ${Qt6_FOUND_COMPONENTS}")
+    if(Qt6_MISSING_COMPONENTS)
+      message(STATUS "Missing Qt6 components: ${Qt6_MISSING_COMPONENTS}")
+    endif()
   endif()
 else()
   message(STATUS "Qt editor disabled - building runtime only")
@@ -481,6 +422,13 @@ find_package(unofficial-lua CONFIG REQUIRED)
 list(APPEND ENGINE_LIBRARIES lua)
 message(STATUS "Found Lua")
 
+# Python and pybind11 for Python scripting support
+find_package(Python3 COMPONENTS Interpreter Development REQUIRED)
+find_package(pybind11 CONFIG REQUIRED)
+list(APPEND ENGINE_LIBRARIES Python3::Python pybind11::headers)
+message(STATUS "Found Python3: ${Python3_VERSION}")
+message(STATUS "Found pybind11: ${pybind11_VERSION}")
+
 # Additional dependencies for static linking
 if(WIN32)
     # Add bzip2 library for FreeType dependency
@@ -503,9 +451,13 @@ message(STATUS "Found ${lib_count} engine libraries")
 #--- Link Engine Dependencies ---
 target_link_libraries(LupineEngine PRIVATE ${ENGINE_LIBRARIES})
 
-# Add library directories for all targets
-if(WIN32 AND BZIP2_LIB)
-    target_link_directories(lupine-runtime PRIVATE "${PLATFORM_DIR}/bzip2_x64-windows-static/lib")
+# Add Python include directories
+if(Python3_FOUND)
+  target_include_directories(LupineEngine PRIVATE ${Python3_INCLUDE_DIRS})
+  target_compile_definitions(LupineEngine PRIVATE
+    LUPINE_PYTHON_SUPPORT=1
+    PYBIND11_DETAILED_ERROR_MESSAGES
+  )
 endif()
 
 # Add Qt libraries if editor is enabled
@@ -533,6 +485,14 @@ if(WIN32)
   target_link_libraries(LupineEngine PRIVATE
     user32 gdi32 shell32 advapi32 kernel32 ws2_32 opengl32
   )
+
+  # Additional Windows libraries for Python static linking
+  if(Python3_FOUND)
+    target_link_libraries(LupineEngine PRIVATE
+      # Python requires these Windows libraries for static linking
+      pathcch shlwapi bcrypt
+    )
+  endif()
 elseif(APPLE)
   # macOS frameworks
   find_library(COCOA_FRAMEWORK Cocoa REQUIRED)
@@ -594,6 +554,11 @@ endif()
 target_link_libraries(lupine-runtime PRIVATE LupineEngine)
 set_target_properties(lupine-runtime PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
 
+# Add library directories for runtime target
+if(WIN32 AND BZIP2_LIB)
+    target_link_directories(lupine-runtime PRIVATE "${PLATFORM_DIR}/bzip2_x64-windows-static/lib")
+endif()
+
 #--- Qt Editor Executable ---
 if(LUPINE_ENABLE_EDITOR AND Qt6_FOUND)
   message(STATUS "=== Building Qt Editor ===")
@@ -623,8 +588,36 @@ if(LUPINE_ENABLE_EDITOR AND Qt6_FOUND)
   # Link libraries
   target_link_libraries(lupine-editor PRIVATE
     LupineEngine
-    Qt6::Core Qt6::Widgets Qt6::Gui Qt6::OpenGL Qt6::OpenGLWidgets
   )
+
+  # Link Qt6 components that were found
+  foreach(component IN LISTS Qt6_FOUND_COMPONENTS)
+    if(TARGET Qt6::${component})
+      target_link_libraries(lupine-editor PRIVATE Qt6::${component})
+      message(STATUS "Linking Qt6::${component} to editor")
+    endif()
+  endforeach()
+
+  # Ensure essential Qt components are linked
+  set(REQUIRED_QT_COMPONENTS Core Widgets Gui)
+  foreach(component IN LISTS REQUIRED_QT_COMPONENTS)
+    if(TARGET Qt6::${component})
+      target_link_libraries(lupine-editor PRIVATE Qt6::${component})
+    else()
+      message(FATAL_ERROR "Required Qt6 component Qt6::${component} not found")
+    endif()
+  endforeach()
+
+  # Link optional Qt components if available
+  set(OPTIONAL_QT_COMPONENTS OpenGL OpenGLWidgets)
+  foreach(component IN LISTS OPTIONAL_QT_COMPONENTS)
+    if(TARGET Qt6::${component})
+      target_link_libraries(lupine-editor PRIVATE Qt6::${component})
+      message(STATUS "Linking optional Qt6::${component} to editor")
+    else()
+      message(STATUS "Optional Qt6::${component} not available")
+    endif()
+  endforeach()
 
   # Platform-specific editor linking using robust Qt configuration
   if(WIN32)

@@ -281,6 +281,7 @@ class BuildEnvironmentSetup:
         # Essential dependencies for basic functionality
         essential_dependencies = [
             'sdl2', 'glm', 'nlohmann-json', 'glad', 'lua',
+            'python3',  # Python interpreter and development libraries
             'pybind11'  # For Python scripting support
         ]
 
@@ -303,7 +304,8 @@ class BuildEnvironmentSetup:
         optional_dependencies = [
             'libjpeg-turbo', 'freetype', 'sqlite3', 'pugixml',
             'libogg', 'libvorbis', 'libflac', 'opus', 'mpg123',
-            'bzip2', 'liblzma', 'lz4', 'zstd'
+            'bzip2', 'liblzma', 'lz4', 'zstd',
+            'zlib'  # Required for Python static linking
         ]
 
         if not self.dev_only:
@@ -1269,6 +1271,41 @@ message(STATUS "Third-party Directory: ${THIRDPARTY_DIR}")
         elif self.system_info['system'] == 'linux':
             if not self._check_command_exists('apt'):
                 missing_deps.append("apt package manager not available")
+
+        # Check Python and pybind11 for scripting support
+        python_found = False
+        pybind11_found = False
+
+        # Check for Python executable
+        python_executables = ['python3', 'python', 'py']
+        for py_exe in python_executables:
+            if self._check_command_exists(py_exe):
+                python_found = True
+                break
+
+        if not python_found:
+            missing_deps.append("Python interpreter (python3/python/py)")
+
+        # Check for Python development headers and pybind11
+        if self.system_info['system'] == 'windows':
+            # Check vcpkg Python installation
+            vcpkg_python = self.thirdparty_dir / "vcpkg" / "installed" / self.system_info['triplet'] / "include" / "Python.h"
+            platform_python = self.thirdparty_dir / "Windows" / "python3_x64-windows-static" / "include" / "Python.h"
+            if not (vcpkg_python.exists() or platform_python.exists()):
+                missing_deps.append("Python development headers")
+
+            # Check pybind11
+            vcpkg_pybind11 = self.thirdparty_dir / "vcpkg" / "installed" / self.system_info['triplet'] / "include" / "pybind11" / "pybind11.h"
+            platform_pybind11 = self.thirdparty_dir / "Windows" / "pybind11_x64-windows" / "include" / "pybind11" / "pybind11.h"
+            if not (vcpkg_pybind11.exists() or platform_pybind11.exists()):
+                missing_deps.append("pybind11 headers")
+        else:
+            # For macOS and Linux, check system installations
+            try:
+                import pybind11
+                pybind11_found = True
+            except ImportError:
+                missing_deps.append("pybind11 Python package")
 
         # Check Qt if required
         if not self.no_qt:
