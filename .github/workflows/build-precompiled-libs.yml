@@ -142,7 +142,7 @@ jobs:
           libminizip-dev libvorbis-dev libogg-dev libflac-dev \
           libmpg123-dev libopus-dev libbz2-dev liblz4-dev \
           libwavpack-dev libsqlite3-dev libssl-dev libglm-dev \
-          libsndfile1-dev qtbase6-dev pybind11-dev
+          libsndfile1-dev qt6-base-dev pybind11-dev
 
         # Try to install additional libraries that might have different names
         sudo apt-get install -y libmp3lame-dev || echo "mp3lame not available"

@@ -373,6 +373,90 @@ class BuildEnvironmentSetup:
         if not self.no_qt:
             self._install_static_qt_linux()
 
+    def _detect_existing_qt(self) -> Optional[Path]:
+        """Detect existing Qt installations on the system."""
+        print("Checking for existing Qt installations...")
+
+        # Common Qt installation paths
+        qt_paths = []
+
+        if self.system_info['system'] == 'windows':
+            # Common Windows Qt installation paths
+            qt_paths = [
+                Path("C:/Qt"),
+                Path("C:/Qt6"),
+                Path("C:/Program Files/Qt"),
+                Path("C:/Program Files (x86)/Qt"),
+                self.thirdparty_dir / "Qt",
+                Path.home() / "Qt",
+                # Check for Qt in PATH
+            ]
+        elif self.system_info['system'] == 'macos':
+            # Common macOS Qt installation paths
+            qt_paths = [
+                Path("/usr/local/opt/qt6"),
+                Path("/opt/homebrew/opt/qt6"),
+                Path("/usr/local/Qt"),
+                Path("/Applications/Qt"),
+                self.thirdparty_dir / "Qt",
+                Path.home() / "Qt",
+            ]
+        elif self.system_info['system'] == 'linux':
+            # Common Linux Qt installation paths
+            qt_paths = [
+                Path("/usr/lib/x86_64-linux-gnu/qt6"),
+                Path("/usr/lib/qt6"),
+                Path("/usr/share/qt6"),
+                Path("/opt/qt6"),
+                self.thirdparty_dir / "Qt",
+                Path.home() / "Qt",
+            ]
+
+        # Check each path for Qt installation
+        for qt_path in qt_paths:
+            if not qt_path.exists():
+                continue
+
+            print(f"Checking Qt path: {qt_path}")
+
+            # Look for Qt version directories or direct installation
+            if self._is_valid_qt_installation(qt_path):
+                print(f"Found valid Qt installation at: {qt_path}")
+                return qt_path
+
+            # Look for version subdirectories
+            for item in qt_path.iterdir():
+                if item.is_dir() and item.name.startswith(('6.', '5.')):
+                    if self._is_valid_qt_installation(item):
+                        print(f"Found valid Qt installation at: {item}")
+                        return item
+
+        print("No existing Qt installation found")
+        return None
+
+    def _is_valid_qt_installation(self, qt_path: Path) -> bool:
+        """Check if a path contains a valid Qt installation."""
+        # Look for key Qt files/directories
+        if self.system_info['system'] == 'windows':
+            # Check for Qt6Core.dll or lib files
+            indicators = [
+                qt_path / "bin" / "Qt6Core.dll",
+                qt_path / "lib" / "Qt6Core.lib",
+                qt_path / "include" / "QtCore",
+                qt_path / "lib" / "cmake" / "Qt6",
+            ]
+        else:
+            # Unix-like systems
+            indicators = [
+                qt_path / "lib" / "libQt6Core.so",
+                qt_path / "lib" / "libQt6Core.a",
+                qt_path / "lib" / "libQt6Core.dylib",
+                qt_path / "include" / "QtCore",
+                qt_path / "lib" / "cmake" / "Qt6",
+            ]
+
+        return any(indicator.exists() for indicator in indicators)
+
     def _install_python_dependencies(self):
         """Install Python packages needed for the build system."""
         print("Installing Python dependencies...")
@@ -412,11 +496,21 @@ class BuildEnvironmentSetup:
         print("Installing static Qt6 for Linux...")
 
         qt_dir = self.thirdparty_dir / "Qt"
-        qt_version = "6.8.0"  # Use Qt 6.8.0 which should be available
+        qt_version = "6.9.1"  # Use Qt 6.9.1 which is what the codebase uses
         qt_arch = "gcc_64"
         qt_modules = ["qtbase", "qttools", "qtdeclarative"]
 
-        # Check if Qt is already installed
+        # First check for existing Qt installations
+        existing_qt = self._detect_existing_qt()
+        if existing_qt and not self.force:
+            # Create a symlink to the existing installation
+            if not qt_dir.exists():
+                qt_dir.parent.mkdir(parents=True, exist_ok=True)
+                qt_dir.symlink_to(existing_qt)
+            print(f"Using existing Qt installation at: {existing_qt}")
+            return
+
+        # Check if Qt is already installed in our target location
         qt_install_dir = qt_dir / qt_version / qt_arch
         if qt_install_dir.exists() and not self.force:
             print(f"Static Qt6 already installed at {qt_install_dir}")
@@ -447,28 +541,63 @@ class BuildEnvironmentSetup:
             print(f"[OK] Static Qt {qt_version} installed in {qt_dir}")
 
         except Exception as e:
-            print(f"[WARN] Failed to install static Qt6: {e}")
-            print("Falling back to system Qt packages...")
+            print(f"[WARN] Failed to install static Qt6 {qt_version}: {e}")
+            print("Trying alternative Qt versions...")
+
+            # Try Qt 6.8.0 as fallback
+            for fallback_version in ["6.8.0", "6.7.3", "6.6.3"]:
+                try:
+                    print(f"Trying Qt {fallback_version}...")
+                    fallback_cmd = [
+                        sys.executable, "-m", "aqt", "install-qt", "linux", "desktop",
+                        fallback_version, qt_arch,
+                        "--outputdir", str(qt_dir)
+                    ]
+                    self._run_command(fallback_cmd)
+                    print(f"[OK] Static Qt {fallback_version} installed as fallback")
+                    return
+                except Exception as fallback_e:
+                    print(f"[WARN] Qt {fallback_version} also failed: {fallback_e}")
+                    continue
+
+            print("All aqtinstall versions failed, falling back to system Qt packages...")
             # Fall back to system packages if static installation fails
             try:
                 qt_deps = [
-                    'qtbase6-dev', 'qttools6-dev', 'qttools6-dev-tools',
-                    'qtdeclarative6-dev', 'libqt6opengl6-dev'
+                    'qt6-base-dev', 'qt6-tools-dev', 'qt6-tools-dev-tools',
+                    'qt6-declarative-dev', 'libqt6opengl6-dev'
                 ]
                 self._run_command(['sudo', 'apt', 'install', '-y'] + qt_deps)
                 print("[OK] System Qt6 packages installed as fallback")
-            except:
-                print("[WARN] Both static and system Qt6 installation failed")
+            except Exception as sys_e:
+                print(f"[WARN] System Qt6 installation also failed: {sys_e}")
+                print("Trying Qt5 as final fallback...")
+                try:
+                    qt5_deps = ['qtbase5-dev', 'qttools5-dev', 'qtdeclarative5-dev']
+                    self._run_command(['sudo', 'apt', 'install', '-y'] + qt5_deps)
+                    print("[OK] Qt5 packages installed as final fallback")
+                except:
+                    print("[ERROR] All Qt installation methods failed")
 
     def _install_static_qt_windows(self, qt_dir: Path) -> bool:
         """Install static Qt6 on Windows using aqtinstall."""
         print("Installing static Qt6 for Windows...")
 
-        qt_version = "6.8.0"  # Use Qt 6.8.0 which should be available
+        qt_version = "6.9.1"  # Use Qt 6.9.1 which is what the codebase uses
         qt_arch = "win64_msvc2022_64"
         qt_modules = ["qtbase", "qttools", "qtdeclarative"]
 
-        # Check if Qt is already installed
+        # First check for existing Qt installations
+        existing_qt = self._detect_existing_qt()
+        if existing_qt and not self.force:
+            # Create a symlink to the existing installation
+            if not qt_dir.exists():
+                qt_dir.parent.mkdir(parents=True, exist_ok=True)
+                qt_dir.symlink_to(existing_qt)
+            print(f"Using existing Qt installation at: {existing_qt}")
+            return True
+
+        # Check if Qt is already installed in our target location
         qt_install_dir = qt_dir / qt_version / qt_arch
         if qt_install_dir.exists() and not self.force:
             print(f"Static Qt6 already installed at {qt_install_dir}")
@@ -507,7 +636,7 @@ class BuildEnvironmentSetup:
         """Install static Qt6 on macOS using aqtinstall."""
         print("Installing static Qt6 for macOS...")
 
-        qt_version = "6.8.0"  # Use Qt 6.8.0 which should be available
+        qt_version = "6.9.1"  # Use Qt 6.9.1 which is what the codebase uses
         # Detect architecture
         if self.system_info['arch'] == "arm64":
             qt_arch = "clang_64"  # Apple Silicon
@@ -515,7 +644,17 @@ class BuildEnvironmentSetup:
             qt_arch = "clang_64"  # Intel
         qt_modules = ["qtbase", "qttools", "qtdeclarative"]
 
-        # Check if Qt is already installed
+        # First check for existing Qt installations
+        existing_qt = self._detect_existing_qt()
+        if existing_qt and not self.force:
+            # Create a symlink to the existing installation
+            if not qt_dir.exists():
+                qt_dir.parent.mkdir(parents=True, exist_ok=True)
+                qt_dir.symlink_to(existing_qt)
+            print(f"Using existing Qt installation at: {existing_qt}")
+            return True
+
+        # Check if Qt is already installed in our target location
         qt_install_dir = qt_dir / qt_version / qt_arch
         if qt_install_dir.exists() and not self.force:
             print(f"Static Qt6 already installed at {qt_install_dir}")
@@ -786,7 +925,7 @@ class BuildEnvironmentSetup:
     def _setup_qt_linux(self, qt_dir: Path):
         """Set up Qt on Linux."""
         # First check if we have static Qt installed via aqtinstall
-        static_qt_dir = qt_dir / "6.8.0" / "gcc_64"
+        static_qt_dir = qt_dir / "6.9.1" / "gcc_64"
         if static_qt_dir.exists():
             print(f"Using static Qt6 from: {static_qt_dir}")
             # Create a symlink for easier access
@@ -924,7 +1063,7 @@ set(QT_DIR "${THIRDPARTY_DIR}/Qt")
 list(APPEND CMAKE_PREFIX_PATH "${QT_DIR}")
 
 # Qt static linking setup for all platforms
-set(QT_VERSION "6.8.0")
+set(QT_VERSION "6.9.1")
 
 if(WIN32)
     # Windows static Qt setup
@@ -1056,14 +1195,43 @@ message(STATUS "Third-party Directory: ${THIRDPARTY_DIR}")
         # Check Qt if required
         if not self.no_qt:
             qt_found = False
+            qt_dir = self.thirdparty_dir / "Qt"
+
+            # Check for aqtinstall Qt installation first
+            qt_version = "6.9.1"
             if self.system_info['system'] == 'windows':
-                vcpkg_qt = self.thirdparty_dir / "vcpkg" / "installed" / self.system_info['triplet'] / "include" / "QtCore"
-                qt_found = vcpkg_qt.exists()
+                qt_arch = "win64_msvc2022_64"
+                aqt_qt_dir = qt_dir / qt_version / qt_arch
+                qt_found = (aqt_qt_dir / "include" / "QtCore").exists() or (aqt_qt_dir / "lib" / "Qt6Core.lib").exists()
+
+                # Fallback to vcpkg Qt
+                if not qt_found:
+                    vcpkg_qt = self.thirdparty_dir / "vcpkg" / "installed" / self.system_info['triplet'] / "include" / "QtCore"
+                    qt_found = vcpkg_qt.exists()
+
             elif self.system_info['system'] == 'macos':
-                brew_qt = Path('/opt/homebrew/opt/qt6') if Path('/opt/homebrew').exists() else Path('/usr/local/opt/qt6')
-                qt_found = brew_qt.exists()
+                qt_arch = "clang_64"
+                aqt_qt_dir = qt_dir / qt_version / qt_arch
+                qt_found = (aqt_qt_dir / "include" / "QtCore").exists() or (aqt_qt_dir / "lib" / "libQt6Core.a").exists()
+
+                # Fallback to Homebrew Qt
+                if not qt_found:
+                    brew_qt = Path('/opt/homebrew/opt/qt6') if Path('/opt/homebrew').exists() else Path('/usr/local/opt/qt6')
+                    qt_found = brew_qt.exists()
+
             elif self.system_info['system'] == 'linux':
-                qt_found = self._check_command_exists('qmake6') or self._check_command_exists('qmake')
+                qt_arch = "gcc_64"
+                aqt_qt_dir = qt_dir / qt_version / qt_arch
+                qt_found = (aqt_qt_dir / "include" / "QtCore").exists() or (aqt_qt_dir / "lib" / "libQt6Core.a").exists()
+
+                # Fallback to system Qt
+                if not qt_found:
+                    qt_found = self._check_command_exists('qmake6') or self._check_command_exists('qmake')
+
+            # Also check for existing Qt using our detection function
+            if not qt_found:
+                existing_qt = self._detect_existing_qt()
+                qt_found = existing_qt is not None
 
             if not qt_found:
                 missing_deps.append("Qt6 development libraries")
