@@ -27,10 +27,12 @@ endif()
 
 # Windows-specific settings
 set(VCPKG_DIR "${THIRDPARTY_DIR}/vcpkg")
-if(EXISTS "${VCPKG_DIR}/scripts/buildsystems/vcpkg.cmake")
-    set(CMAKE_TOOLCHAIN_FILE "${VCPKG_DIR}/scripts/buildsystems/vcpkg.cmake")
+# Note: CMAKE_TOOLCHAIN_FILE should be set via command line or before project() call
+# This is just for reference and will be set by the build system
+set(LUPINE_VCPKG_TOOLCHAIN_FILE "${VCPKG_DIR}/scripts/buildsystems/vcpkg.cmake")
+if(EXISTS "${LUPINE_VCPKG_TOOLCHAIN_FILE}")
     set(VCPKG_TARGET_TRIPLET "${LUPINE_TRIPLET}")
-    message(STATUS "Using vcpkg toolchain: ${CMAKE_TOOLCHAIN_FILE}")
+    message(STATUS "vcpkg toolchain available: ${LUPINE_VCPKG_TOOLCHAIN_FILE}")
 endif()
 
 # Windows system libraries

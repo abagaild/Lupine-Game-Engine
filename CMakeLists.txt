@@ -33,6 +33,15 @@ if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
 endif()
 
+#--- vcpkg Integration (after project() call) ---
+# Handle vcpkg toolchain if not already set via command line
+if(NOT CMAKE_TOOLCHAIN_FILE AND DEFINED LUPINE_VCPKG_TOOLCHAIN_FILE)
+  if(EXISTS "${LUPINE_VCPKG_TOOLCHAIN_FILE}")
+    set(CMAKE_TOOLCHAIN_FILE "${LUPINE_VCPKG_TOOLCHAIN_FILE}" CACHE STRING "vcpkg toolchain file")
+    message(STATUS "Setting vcpkg toolchain: ${CMAKE_TOOLCHAIN_FILE}")
+  endif()
+endif()
+
 #--- Enhanced Platform Detection ---
 if(WIN32)
   set(PLATFORM_NAME "Windows")
