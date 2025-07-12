@@ -75,10 +75,35 @@ jobs:
     - name: Install system dependencies (Windows)
       if: matrix.platform == 'Windows'
       run: |
+        # Install basic tools
         choco install cmake git ninja -y
+
+        # Verify Python is available
+        Write-Host "Checking Python availability..."
+        $pythonCmd = $null
+        foreach ($py in @("python", "python3", "py")) {
+          if (Get-Command $py -ErrorAction SilentlyContinue) {
+            $pythonCmd = $py
+            Write-Host "Found Python: $py"
+            break
+          }
+        }
+
+        if (-not $pythonCmd) {
+          Write-Host "Installing Python..."
+          choco install python -y
+          $pythonCmd = "python"
+        }
+
         Write-Host "Current directory: $(Get-Location)"
+        Write-Host "Python version: $(&$pythonCmd --version)"
+
         if (Test-Path "scripts\setup_build_environment.py") {
-          python scripts\setup_build_environment.py --force
+          Write-Host "Running setup script..."
+          & $pythonCmd scripts\setup_build_environment.py --force --dev-only
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "Setup script failed, but continuing..."
+          }
         } else {
           Write-Host "scripts\setup_build_environment.py not found!"
           Get-ChildItem -Recurse -Filter "*.py" | Select-Object -ExpandProperty Name
@@ -90,9 +115,17 @@ jobs:
       if: matrix.platform == 'Linux'
       run: |
         sudo apt-get update
-        sudo apt-get install -y build-essential cmake ninja-build pkg-config
+        sudo apt-get install -y build-essential cmake ninja-build pkg-config python3 python3-pip
+
+        echo "Python version: $(python3 --version)"
+        echo "Current directory: $(pwd)"
+
         if [ -f "scripts/setup_build_environment.py" ]; then
-          python3 scripts/setup_build_environment.py --force
+          echo "Running setup script..."
+          python3 scripts/setup_build_environment.py --force --dev-only
+          if [ $? -ne 0 ]; then
+            echo "Setup script failed, but continuing..."
+          fi
         else
           echo "[ERROR] scripts/setup_build_environment.py not found!"
           find . -name "*.py" -type f
@@ -103,9 +136,17 @@ jobs:
       if: matrix.platform == 'Mac-OSX' || matrix.platform == 'Mac-ARM64'
       run: |
         brew update
-        brew install cmake ninja pkg-config
+        brew install cmake ninja pkg-config python3
+
+        echo "Python version: $(python3 --version)"
+        echo "Current directory: $(pwd)"
+
         if [ -f "scripts/setup_build_environment.py" ]; then
-          python3 scripts/setup_build_environment.py --force
+          echo "Running setup script..."
+          python3 scripts/setup_build_environment.py --force --dev-only
+          if [ $? -ne 0 ]; then
+            echo "Setup script failed, but continuing..."
+          fi
         else
           echo "[ERROR] scripts/setup_build_environment.py not found!"
           find . -name "*.py" -type f
@@ -117,8 +158,32 @@ jobs:
         echo "Current directory: $(pwd)"
         echo "Available Python files:"
         find . -name "*.py" -type f
+
+        # Determine Python command
+        PYTHON_CMD="python3"
+        if ! command -v python3 &> /dev/null; then
+          if command -v python &> /dev/null; then
+            PYTHON_CMD="python"
+          else
+            echo "[ERROR] No Python executable found!"
+            exit 1
+          fi
+        fi
+
+        echo "Using Python: $PYTHON_CMD"
+        echo "Python version: $($PYTHON_CMD --version)"
+
         if [ -f "scripts/build_precompiled_libs.py" ]; then
-          python3 scripts/build_precompiled_libs.py --platform ${{ matrix.platform }}
+          echo "Building precompiled libraries for platform: ${{ matrix.platform }}"
+          $PYTHON_CMD scripts/build_precompiled_libs.py --platform ${{ matrix.platform }}
+
+          # Check if output was created
+          if [ -d "precompiled_packages" ]; then
+            echo "Build output:"
+            ls -la precompiled_packages/
+          else
+            echo "Warning: No precompiled_packages directory created"
+          fi
         else
           echo "[ERROR] scripts/build_precompiled_libs.py not found!"
           exit 1

@@ -78,14 +78,25 @@ class PrecompiledLibraryBuilder:
 
         print(f"Creating package: {package_path}")
 
-        with zipfile.ZipFile(package_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
-            # Add all files from the platform directory
-            for root, dirs, files in os.walk(platform_dir):
-                for file in files:
-                    file_path = Path(root) / file
-                    # Calculate relative path from thirdparty directory
-                    rel_path = file_path.relative_to(self.thirdparty_dir)
-                    zipf.write(file_path, rel_path)
+        try:
+            with zipfile.ZipFile(package_path, 'w', zipfile.ZIP_DEFLATED, compresslevel=6) as zipf:
+                # Add all files from the platform directory
+                files_added = 0
+                for root, dirs, files in os.walk(platform_dir):
+                    for file in files:
+                        try:
+                            file_path = Path(root) / file
+                            # Calculate relative path from thirdparty directory
+                            rel_path = file_path.relative_to(self.thirdparty_dir)
+                            zipf.write(file_path, rel_path)
+                            files_added += 1
+                        except Exception as e:
+                            print(f"[WARN] Failed to add file {file_path} to archive: {e}")
+
+                print(f"Added {files_added} files to package")
+        except Exception as e:
+            print(f"[ERROR] Failed to create package: {e}")
+            return False
 
         # Create package info
         info = self._create_package_info(platform, triplet, lib_dir)
@@ -153,10 +164,23 @@ class PrecompiledLibraryBuilder:
             return False
 
         try:
+            # Try different Python executables
+            python_executables = [sys.executable, 'python3', 'python', 'py']
+            python_cmd = None
+
+            for py_exe in python_executables:
+                if shutil.which(py_exe):
+                    python_cmd = py_exe
+                    break
+
+            if not python_cmd:
+                print(f"[ERROR] No Python executable found")
+                return False
+
             # Run setup script to build libraries
-            cmd = [sys.executable, str(setup_script), "--force"]
+            cmd = [python_cmd, str(setup_script), "--force"]
             print(f"Running: {' '.join(cmd)}")
-            result = subprocess.run(cmd, cwd=self.root_dir, capture_output=True, text=True)
+            result = subprocess.run(cmd, cwd=str(self.root_dir), capture_output=True, text=True, timeout=1800)  # 30 minute timeout
 
             if result.returncode != 0:
                 print(f"[WARN] Setup script had issues:")
@@ -167,6 +191,9 @@ class PrecompiledLibraryBuilder:
             print(f"[OK] Setup script completed")
             return True
 
+        except subprocess.TimeoutExpired:
+            print(f"[ERROR] Setup script timed out after 30 minutes")
+            return False
         except Exception as e:
             print(f"[ERROR] Failed to run setup script: {e}")
             return False
@@ -239,7 +266,15 @@ class PrecompiledLibraryBuilder:
         if not shutil.which("gh"):
             print("[ERROR] GitHub CLI (gh) not found. Please install it to upload releases.")
             return False
-            
+
+        # Verify we have files to upload
+        zip_files = list(self.output_dir.glob("*.zip"))
+        json_files = list(self.output_dir.glob("*.json"))
+
+        if not zip_files and not json_files:
+            print("[ERROR] No files found to upload")
+            return False
+
         try:
             # Create or update release
             cmd = [
@@ -248,17 +283,21 @@ class PrecompiledLibraryBuilder:
                 "--title", f"Precompiled Libraries {tag}",
                 "--notes", "Precompiled static libraries for fast Lupine Engine setup"
             ]
-            
+
             # Add all package files
-            for file in self.output_dir.glob("*.zip"):
+            for file in zip_files:
                 cmd.append(str(file))
-            for file in self.output_dir.glob("*.json"):
+            for file in json_files:
                 cmd.append(str(file))
-                
-            subprocess.run(cmd, check=True, env={**os.environ, "GITHUB_TOKEN": token})
+
+            print(f"Uploading {len(zip_files)} zip files and {len(json_files)} json files...")
+            subprocess.run(cmd, check=True, env={**os.environ, "GITHUB_TOKEN": token}, timeout=600)
             print("[OK] Packages uploaded successfully!")
             return True
 
+        except subprocess.TimeoutExpired:
+            print(f"[ERROR] Upload timed out after 10 minutes")
+            return False
         except subprocess.CalledProcessError as e:
             print(f"[ERROR] Failed to upload packages: {e}")
             return False

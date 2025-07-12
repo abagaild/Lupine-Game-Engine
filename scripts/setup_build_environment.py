@@ -12,7 +12,7 @@ across Windows, macOS, and Linux platforms. It handles:
 
 Usage:
     python setup_build_environment.py [--force] [--no-qt] [--dev-only]
-    
+
 Options:
     --force     Force reinstallation of dependencies
     --no-qt     Skip Qt installation (runtime-only build)
@@ -25,6 +25,7 @@ import platform
 import subprocess
 import shutil
 import urllib.request
+import urllib.error
 import tarfile
 import zipfile
 import json
@@ -32,6 +33,7 @@ import argparse
 import datetime
 import concurrent.futures
 import threading
+import time
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
@@ -102,18 +104,30 @@ class BuildEnvironmentSetup:
         else:
             raise RuntimeError(f"Unsupported system: {system}")
 
-    def _run_command(self, cmd: List[str], check: bool = True, capture: bool = False) -> Optional[str]:
+    def _run_command(self, cmd: List[str], check: bool = True, capture: bool = False, cwd: Optional[Path] = None) -> Optional[str]:
         """Run a command and optionally capture output."""
         try:
+            # Convert Path objects to strings for subprocess
+            str_cmd = [str(c) for c in cmd]
+            working_dir = str(cwd) if cwd else None
+
             if capture:
-                result = subprocess.run(cmd, check=check, capture_output=True, text=True)
+                result = subprocess.run(str_cmd, check=check, capture_output=True, text=True, cwd=working_dir)
                 return result.stdout.strip()
             else:
-                subprocess.run(cmd, check=check)
+                subprocess.run(str_cmd, check=check, cwd=working_dir)
                 return None
         except subprocess.CalledProcessError as e:
             if check:
-                print(f"Command failed: {' '.join(cmd)}")
+                print(f"Command failed: {' '.join(str_cmd)}")
+                print(f"Error: {e}")
+                if e.stderr:
+                    print(f"Stderr: {e.stderr}")
+                sys.exit(1)
+            return None
+        except FileNotFoundError as e:
+            if check:
+                print(f"Command not found: {' '.join(str_cmd)}")
                 print(f"Error: {e}")
                 sys.exit(1)
             return None
@@ -139,14 +153,20 @@ class BuildEnvironmentSetup:
         if not self._check_command_exists('cmake'):
             print("Installing CMake...")
             if self._check_command_exists('choco'):
-                self._run_command(['choco', 'install', 'cmake', '-y'])
+                try:
+                    self._run_command(['choco', 'install', 'cmake', '-y'])
+                except:
+                    print("Failed to install CMake via chocolatey")
             else:
                 print("Please install CMake manually from https://cmake.org/download/")
-                
+
         if not self._check_command_exists('git'):
             print("Installing Git...")
             if self._check_command_exists('choco'):
-                self._run_command(['choco', 'install', 'git', '-y'])
+                try:
+                    self._run_command(['choco', 'install', 'git', '-y'])
+                except:
+                    print("Failed to install Git via chocolatey")
             else:
                 print("Please install Git manually from https://git-scm.com/download/win")
 
@@ -155,9 +175,21 @@ class BuildEnvironmentSetup:
         if not vcpkg_dir.exists() or self.force:
             print("Setting up vcpkg...")
             if vcpkg_dir.exists():
-                shutil.rmtree(vcpkg_dir)
-            self._run_command(['git', 'clone', 'https://github.com/Microsoft/vcpkg.git', str(vcpkg_dir)])
-            self._run_command([str(vcpkg_dir / "bootstrap-vcpkg.bat")])
+                try:
+                    shutil.rmtree(vcpkg_dir)
+                except PermissionError:
+                    print("Warning: Could not remove existing vcpkg directory. Continuing...")
+
+            try:
+                self._run_command(['git', 'clone', 'https://github.com/Microsoft/vcpkg.git', str(vcpkg_dir)])
+                bootstrap_script = vcpkg_dir / "bootstrap-vcpkg.bat"
+                if bootstrap_script.exists():
+                    self._run_command([str(bootstrap_script)], cwd=vcpkg_dir)
+                else:
+                    print("Warning: vcpkg bootstrap script not found")
+            except Exception as e:
+                print(f"Warning: Failed to setup vcpkg: {e}")
+                print("Continuing without vcpkg...")
 
         # Get triplet for this platform
         triplet = self.system_info['triplet']
@@ -332,23 +364,54 @@ class BuildEnvironmentSetup:
             'pybind11', 'numpy', 'requests', 'cmake'
         ]
 
+        # Try different Python executables
+        python_executables = ['python3', 'python', 'py']
+        python_cmd = None
+
+        for py_exe in python_executables:
+            if self._check_command_exists(py_exe):
+                python_cmd = py_exe
+                break
+
+        if not python_cmd:
+            print("Warning: No Python executable found. Skipping Python package installation.")
+            return
+
         for package in python_packages:
             try:
-                self._run_command(['python3', '-m', 'pip', 'install', '--user', package])
+                self._run_command([python_cmd, '-m', 'pip', 'install', '--user', package])
+                print(f"Successfully installed {package}")
             except:
                 print(f"Warning: Failed to install Python package {package}")
+                # Try without --user flag
+                try:
+                    self._run_command([python_cmd, '-m', 'pip', 'install', package])
+                    print(f"Successfully installed {package} (system-wide)")
+                except:
+                    print(f"Warning: Failed to install Python package {package} (both user and system-wide)")
 
     def _download_precompiled_libraries(self, base_url: str, archive_name: str, local_path: Path) -> bool:
         """Download and extract precompiled libraries if available."""
         try:
-            import urllib.request
-            import zipfile
-
             download_url = f"{base_url}/{archive_name}"
             print(f"Checking for precompiled libraries at {download_url}...")
 
-            # Try to download the precompiled archive
-            urllib.request.urlretrieve(download_url, local_path)
+            # Try to download the precompiled archive with timeout
+            request = urllib.request.Request(download_url)
+            request.add_header('User-Agent', 'Lupine-Engine-Setup/1.0')
+
+            with urllib.request.urlopen(request, timeout=30) as response:
+                if response.status == 200:
+                    with open(local_path, 'wb') as f:
+                        shutil.copyfileobj(response, f)
+                else:
+                    print(f"Download failed with status: {response.status}")
+                    return False
+
+            # Verify the downloaded file
+            if not local_path.exists() or local_path.stat().st_size == 0:
+                print("Downloaded file is empty or missing")
+                return False
 
             # Extract to thirdparty directory
             with zipfile.ZipFile(local_path, 'r') as zip_ref:
@@ -360,6 +423,12 @@ class BuildEnvironmentSetup:
             print("Precompiled libraries downloaded and extracted successfully!")
             return True
 
+        except urllib.error.HTTPError as e:
+            print(f"HTTP error downloading precompiled libraries: {e.code} {e.reason}")
+            return False
+        except urllib.error.URLError as e:
+            print(f"URL error downloading precompiled libraries: {e.reason}")
+            return False
         except Exception as e:
             print(f"Precompiled libraries not available: {e}")
             return False
@@ -381,35 +450,40 @@ class BuildEnvironmentSetup:
 
     def _install_vcpkg_packages_parallel(self, vcpkg_exe: Path, packages: list, triplet: str, ignore_failures: bool = False):
         """Install vcpkg packages with parallel processing."""
-        import concurrent.futures
-        import threading
+        if not vcpkg_exe.exists():
+            print(f"Warning: vcpkg executable not found at {vcpkg_exe}")
+            return
 
         def install_package(package):
             try:
                 cmd = [str(vcpkg_exe), 'install', f'{package}:{triplet}']
-                result = self._run_command(cmd, capture=True)
+                result = self._run_command(cmd, capture=True, check=False)
                 return package, True, result
             except Exception as e:
                 return package, False, str(e)
 
         # Use thread pool for parallel installation
-        max_workers = min(4, len(packages))  # Limit to 4 parallel jobs to avoid overwhelming the system
+        max_workers = min(2, len(packages))  # Limit to 2 parallel jobs to avoid overwhelming the system
+
+        print(f"Installing {len(packages)} packages with {max_workers} workers...")
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
             # Submit all package installations
             future_to_package = {executor.submit(install_package, pkg): pkg for pkg in packages}
 
             # Process results as they complete
+            completed = 0
             for future in concurrent.futures.as_completed(future_to_package):
                 package, success, result = future.result()
+                completed += 1
 
                 if success:
-                    print(f"[OK] {package} installed successfully")
+                    print(f"[OK] {package} installed successfully ({completed}/{len(packages)})")
                 else:
                     if ignore_failures:
-                        print(f"[WARN] {package} failed to install (optional): {result}")
+                        print(f"[WARN] {package} failed to install (optional): {result} ({completed}/{len(packages)})")
                     else:
-                        print(f"[ERROR] {package} failed to install: {result}")
+                        print(f"[ERROR] {package} failed to install: {result} ({completed}/{len(packages)})")
 
     def setup_cross_compilation_libraries(self):
         """Set up libraries for all target platforms to enable cross-compilation."""
