@@ -492,93 +492,38 @@ class BuildEnvironmentSetup:
                     print(f"Warning: Failed to install Python package {package} (both user and system-wide)")
 
     def _install_static_qt_linux(self):
-        """Install static Qt6 on Linux using aqtinstall."""
-        print("Installing static Qt6 for Linux...")
-
-        qt_dir = self.thirdparty_dir / "Qt"
-        # Qt 6.9.1 is not available for Linux, use 6.8.0 instead
-        qt_version = "6.8.0"  # Use Qt 6.8.0 for Linux (6.9.1 not available)
-        qt_arch = "gcc_64"
-        qt_modules = ["qtbase", "qttools", "qtdeclarative"]
+        """Install Qt6 on Linux using system packages (more reliable than aqtinstall)."""
+        print("Installing Qt6 for Linux...")
 
         # First check for existing Qt installations
         existing_qt = self._detect_existing_qt()
         if existing_qt and not self.force:
-            # Create a symlink to the existing installation
-            if not qt_dir.exists():
-                qt_dir.parent.mkdir(parents=True, exist_ok=True)
-                qt_dir.symlink_to(existing_qt)
             print(f"Using existing Qt installation at: {existing_qt}")
             return
 
-        # Check if Qt is already installed in our target location
-        qt_install_dir = qt_dir / qt_version / qt_arch
-        if qt_install_dir.exists() and not self.force:
-            print(f"Static Qt6 already installed at {qt_install_dir}")
-            return
+        # Skip aqtinstall for Linux CI environments - use system packages directly
+        print("Using system Qt packages for Linux (more reliable than aqtinstall)...")
 
         try:
-            # Install aqtinstall if not present
-            if not shutil.which("aqt"):
-                print("Installing aqtinstall...")
-                self._run_command([sys.executable, "-m", "pip", "install", "--user", "aqtinstall"])
-            else:
-                print("aqtinstall already present")
-
-            # Create destination directory
-            qt_dir.mkdir(parents=True, exist_ok=True)
-
-            # Download and install static Qt (base installation without extra modules)
-            cmd = [
-                sys.executable, "-m", "aqt", "install-qt", "linux", "desktop",
-                qt_version, qt_arch,
-                "--outputdir", str(qt_dir)
+            # Try Qt6 packages first
+            qt6_deps = [
+                'qt6-base-dev', 'qt6-tools-dev', 'qt6-tools-dev-tools',
+                'qt6-declarative-dev', 'libqt6opengl6-dev'
             ]
+            print("Installing Qt6 system packages...")
+            self._run_command(['sudo', 'apt', 'install', '-y'] + qt6_deps)
+            print("[OK] System Qt6 packages installed")
 
-            print(f"Downloading static Qt {qt_version}...")
-            print(f"Command: {' '.join(cmd)}")
-            self._run_command(cmd)
-
-            print(f"[OK] Static Qt {qt_version} installed in {qt_dir}")
-
-        except Exception as e:
-            print(f"[WARN] Failed to install static Qt6 {qt_version}: {e}")
-            print("Trying alternative Qt versions...")
-
-            # Try Qt 6.8.0 as fallback
-            for fallback_version in ["6.8.0", "6.7.3", "6.6.3"]:
-                try:
-                    print(f"Trying Qt {fallback_version}...")
-                    fallback_cmd = [
-                        sys.executable, "-m", "aqt", "install-qt", "linux", "desktop",
-                        fallback_version, qt_arch,
-                        "--outputdir", str(qt_dir)
-                    ]
-                    self._run_command(fallback_cmd)
-                    print(f"[OK] Static Qt {fallback_version} installed as fallback")
-                    return
-                except Exception as fallback_e:
-                    print(f"[WARN] Qt {fallback_version} also failed: {fallback_e}")
-                    continue
-
-            print("All aqtinstall versions failed, falling back to system Qt packages...")
-            # Fall back to system packages if static installation fails
+        except Exception as qt6_e:
+            print(f"[WARN] Qt6 system packages failed: {qt6_e}")
+            print("Trying Qt5 as fallback...")
             try:
-                qt_deps = [
-                    'qt6-base-dev', 'qt6-tools-dev', 'qt6-tools-dev-tools',
-                    'qt6-declarative-dev', 'libqt6opengl6-dev'
-                ]
-                self._run_command(['sudo', 'apt', 'install', '-y'] + qt_deps)
-                print("[OK] System Qt6 packages installed as fallback")
-            except Exception as sys_e:
-                print(f"[WARN] System Qt6 installation also failed: {sys_e}")
-                print("Trying Qt5 as final fallback...")
-                try:
-                    qt5_deps = ['qtbase5-dev', 'qttools5-dev', 'qtdeclarative5-dev']
-                    self._run_command(['sudo', 'apt', 'install', '-y'] + qt5_deps)
-                    print("[OK] Qt5 packages installed as final fallback")
-                except:
-                    print("[ERROR] All Qt installation methods failed")
+                qt5_deps = ['qtbase5-dev', 'qttools5-dev', 'qtdeclarative5-dev']
+                self._run_command(['sudo', 'apt', 'install', '-y'] + qt5_deps)
+                print("[OK] Qt5 packages installed as fallback")
+            except Exception as qt5_e:
+                print(f"[ERROR] All Qt installation methods failed: {qt5_e}")
+                print("Continuing without Qt - some features may not work")
 
     def _install_static_qt_windows(self, qt_dir: Path) -> bool:
         """Install static Qt6 on Windows using aqtinstall."""
@@ -1092,15 +1037,45 @@ elseif(APPLE)
         set(HOMEBREW_PREFIX "/usr/local")
     endif()
 
-    # Add Homebrew include and library paths
-    include_directories("${HOMEBREW_PREFIX}/include")
-    link_directories("${HOMEBREW_PREFIX}/lib")
+    # Add Homebrew to CMAKE_PREFIX_PATH for package discovery
     list(APPEND CMAKE_PREFIX_PATH "${HOMEBREW_PREFIX}")
 
-    # Add Python include path for pybind11
-    if(EXISTS "${HOMEBREW_PREFIX}/opt/python@3.11/include")
+    # Add specific library paths for common Homebrew packages
+    set(HOMEBREW_LIB_PATHS
+        "${HOMEBREW_PREFIX}/opt/sdl2/lib/cmake"
+        "${HOMEBREW_PREFIX}/opt/sdl2_image/lib/cmake"
+        "${HOMEBREW_PREFIX}/opt/sdl2_ttf/lib/cmake"
+        "${HOMEBREW_PREFIX}/opt/sdl2_mixer/lib/cmake"
+        "${HOMEBREW_PREFIX}/opt/assimp/lib/cmake"
+        "${HOMEBREW_PREFIX}/opt/bullet/lib/cmake"
+        "${HOMEBREW_PREFIX}/opt/lua/lib/cmake"
+        "${HOMEBREW_PREFIX}/opt/yaml-cpp/lib/cmake"
+        "${HOMEBREW_PREFIX}/opt/spdlog/lib/cmake"
+        "${HOMEBREW_PREFIX}/opt/glm/lib/cmake"
+        "${HOMEBREW_PREFIX}/opt/nlohmann-json/lib/cmake"
+        "${HOMEBREW_PREFIX}/opt/pybind11/lib/cmake"
+        "${HOMEBREW_PREFIX}/opt/python@3.11/lib/cmake"
+        "${HOMEBREW_PREFIX}/opt/python@3.12/lib/cmake"
+    )
+    list(APPEND CMAKE_PREFIX_PATH ${HOMEBREW_LIB_PATHS})
+
+    # Add include directories for libraries that don't have proper CMake configs
+    include_directories(
+        "${HOMEBREW_PREFIX}/include"
+        "${HOMEBREW_PREFIX}/include/SDL2"
+        "${HOMEBREW_PREFIX}/include/box2d"
+    )
+
+    # Add vcpkg paths for libraries not available via Homebrew
+    if(EXISTS "${THIRDPARTY_DIR}/vcpkg/installed/x64-osx")
+        list(APPEND CMAKE_PREFIX_PATH "${THIRDPARTY_DIR}/vcpkg/installed/x64-osx")
+        include_directories("${THIRDPARTY_DIR}/vcpkg/installed/x64-osx/include")
+    endif()
+
+    # Add Python include paths
+    if(EXISTS "${HOMEBREW_PREFIX}/opt/python@3.11/include/python3.11")
         include_directories("${HOMEBREW_PREFIX}/opt/python@3.11/include/python3.11")
-    elseif(EXISTS "${HOMEBREW_PREFIX}/opt/python@3.12/include")
+    elseif(EXISTS "${HOMEBREW_PREFIX}/opt/python@3.12/include/python3.12")
         include_directories("${HOMEBREW_PREFIX}/opt/python@3.12/include/python3.12")
     endif()
 
@@ -1120,6 +1095,7 @@ elseif(APPLE)
     endif()
 
     message(STATUS "Using Homebrew prefix: ${HOMEBREW_PREFIX}")
+    message(STATUS "CMAKE_PREFIX_PATH: ${CMAKE_PREFIX_PATH}")
 elseif(UNIX AND NOT APPLE)
     # Linux static Qt setup
     set(QT_STATIC_DIR "${QT_DIR}/${QT_VERSION}/gcc_64")

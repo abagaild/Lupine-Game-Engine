@@ -180,6 +180,16 @@ jobs:
         # Try boost separately as it might have different name
         brew install boost || echo "boost not available"
 
+        # Install vcpkg for libraries not available via Homebrew (like glad)
+        if [ ! -d "thirdparty/vcpkg" ]; then
+          echo "Installing vcpkg for missing libraries..."
+          git clone https://github.com/Microsoft/vcpkg.git thirdparty/vcpkg
+          ./thirdparty/vcpkg/bootstrap-vcpkg.sh
+
+          # Install glad via vcpkg
+          ./thirdparty/vcpkg/vcpkg install glad:x64-osx || echo "glad installation failed"
+        fi
+
         echo "macOS setup completed"
 
     - name: Debug installed libraries
