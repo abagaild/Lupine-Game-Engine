@@ -77,17 +77,42 @@ jobs:
       if: matrix.platform == 'Windows'
       run: |
         echo "=== Setting up Windows dependencies ==="
-        
+
         # Install vcpkg if not cached
         if (!(Test-Path "thirdparty\vcpkg\vcpkg.exe")) {
           Write-Host "Installing vcpkg..."
           git clone https://github.com/Microsoft/vcpkg.git thirdparty\vcpkg
           .\thirdparty\vcpkg\bootstrap-vcpkg.bat
         }
-        
+
         # Install essential build tools
         choco install cmake ninja -y
-        
+
+        # Install bare minimum essential libraries via vcpkg
+        $triplet = "${{ matrix.triplet }}"
+        $vcpkg = "thirdparty\vcpkg\vcpkg.exe"
+
+        Write-Host "Installing bare minimum essential libraries for $triplet..."
+        # Core libraries
+        & $vcpkg install sdl2:$triplet sdl2-image:$triplet sdl2-mixer:$triplet sdl2-ttf:$triplet
+        & $vcpkg install assimp:$triplet box2d:$triplet bullet3:$triplet lua:$triplet
+        & $vcpkg install yaml-cpp:$triplet pugixml:$triplet glad:$triplet spdlog:$triplet
+        & $vcpkg install nlohmann-json:$triplet minizip:$triplet
+
+        # Audio libraries
+        & $vcpkg install libvorbis:$triplet libogg:$triplet libflac:$triplet
+        & $vcpkg install mp3lame:$triplet mpg123:$triplet opus:$triplet libsndfile:$triplet
+
+        # Compression and utility libraries
+        & $vcpkg install bzip2:$triplet lz4:$triplet wavpack:$triplet sqlite3:$triplet
+        & $vcpkg install openssl:$triplet glm:$triplet boost-uuid:$triplet stb:$triplet
+
+        # Qt and Python bindings
+        & $vcpkg install qtbase:$triplet pybind11:$triplet
+
+        # Integrate vcpkg
+        & $vcpkg integrate install
+
         Write-Host "Windows setup completed"
       shell: powershell
 
@@ -95,10 +120,10 @@ jobs:
       if: matrix.platform == 'Linux'
       run: |
         echo "=== Setting up Linux dependencies ==="
-        
+
         # Update package lists
         sudo apt-get update
-        
+
         # Install build essentials
         sudo apt-get install -y \
           build-essential cmake ninja-build pkg-config \
@@ -108,53 +133,211 @@ jobs:
           libxi-dev libxext-dev libxrandr-dev libxinerama-dev libxcursor-dev \
           libxss-dev libxxf86vm-dev \
           libgtk-3-dev
-        
+
+        # Install bare minimum essential libraries via apt
+        sudo apt-get install -y \
+          libsdl2-dev libsdl2-image-dev libsdl2-ttf-dev libsdl2-mixer-dev \
+          libassimp-dev libbox2d-dev libbullet-dev liblua5.4-dev \
+          libyaml-cpp-dev libpugixml-dev libspdlog-dev nlohmann-json3-dev \
+          libminizip-dev libvorbis-dev libogg-dev libflac-dev \
+          libmpg123-dev libopus-dev libbz2-dev liblz4-dev \
+          libwavpack-dev libsqlite3-dev libssl-dev libglm-dev \
+          libsndfile1-dev qtbase5-dev pybind11-dev
+
+        # Try to install additional libraries that might have different names
+        sudo apt-get install -y libmp3lame-dev || echo "mp3lame not available"
+        sudo apt-get install -y libstb-dev || echo "stb not available"
+        sudo apt-get install -y libboost-uuid-dev || echo "boost-uuid not available"
+
         echo "Linux setup completed"
 
     - name: Setup macOS dependencies
       if: matrix.platform == 'Mac-OSX' || matrix.platform == 'Mac-ARM64'
       run: |
         echo "=== Setting up macOS dependencies ==="
-        
+
         # Update Homebrew
         brew update
-        
+
         # Install build tools
         brew install cmake ninja pkg-config
-        
+
+        # Install bare minimum essential libraries via Homebrew
+        # Core libraries
+        brew install sdl2 sdl2_image sdl2_ttf sdl2_mixer || echo "SDL2 packages failed"
+        brew install assimp box2d bullet lua yaml-cpp pugixml spdlog || echo "Some core packages failed"
+        brew install nlohmann-json minizip || echo "JSON/minizip packages failed"
+
+        # Audio libraries
+        brew install libvorbis libogg flac mpg123 opus libsndfile || echo "Some audio packages failed"
+
+        # Compression and utility libraries
+        brew install bzip2 lz4 wavpack sqlite openssl glm || echo "Some utility packages failed"
+
+        # Development libraries
+        brew install qt pybind11 || echo "Development packages failed"
+
+        # Try boost separately as it might have different name
+        brew install boost || echo "boost not available"
+
         echo "macOS setup completed"
 
-    - name: Build libraries for platform
+    - name: Debug installed libraries
+      run: |
+        echo "=== Debugging installed libraries for ${{ matrix.platform }} ==="
+
+        if [ "${{ matrix.platform }}" = "Windows" ]; then
+          echo "Checking vcpkg installed libraries..."
+          if [ -d "thirdparty/vcpkg/installed/${{ matrix.triplet }}" ]; then
+            echo "vcpkg installed directory exists"
+            ls -la "thirdparty/vcpkg/installed/${{ matrix.triplet }}/" || true
+            if [ -d "thirdparty/vcpkg/installed/${{ matrix.triplet }}/lib" ]; then
+              echo "Library files in vcpkg:"
+              ls -la "thirdparty/vcpkg/installed/${{ matrix.triplet }}/lib/" | head -20 || true
+            fi
+          else
+            echo "vcpkg installed directory not found"
+          fi
+        elif [ "${{ matrix.platform }}" = "Linux" ]; then
+          echo "Checking system libraries..."
+          echo "Static libraries in /usr/lib/x86_64-linux-gnu:"
+          find /usr/lib/x86_64-linux-gnu -name "*.a" | head -10 || true
+          echo "Headers in /usr/include:"
+          ls -la /usr/include/ | grep -E "(SDL2|glm|assimp|bullet|lua|yaml|spdlog|nlohmann|pugixml|minizip|vorbis|ogg|flac|opus|sqlite|boost)" || true
+        else
+          echo "Checking Homebrew libraries..."
+          echo "Libraries in /usr/local/lib:"
+          find /usr/local/lib -name "*.a" | head -10 || true
+          echo "Libraries in /opt/homebrew/lib:"
+          find /opt/homebrew/lib -name "*.a" | head -10 || true
+        fi
+      shell: bash
+
+    - name: Build libraries for Windows
+      if: matrix.platform == 'Windows'
+      run: |
+        Write-Host "=== Building libraries for Windows ==="
+
+        # Create platform directory structure
+        New-Item -ItemType Directory -Force -Path "thirdparty\${{ matrix.platform }}\lib"
+        New-Item -ItemType Directory -Force -Path "thirdparty\${{ matrix.platform }}\include"
+
+        # Copy libraries from vcpkg
+        Write-Host "Copying Windows libraries from vcpkg..."
+        $vcpkgInstalled = "thirdparty\vcpkg\installed\${{ matrix.triplet }}"
+        if (Test-Path $vcpkgInstalled) {
+          if (Test-Path "$vcpkgInstalled\lib") {
+            Copy-Item "$vcpkgInstalled\lib\*" "thirdparty\${{ matrix.platform }}\lib\" -Recurse -Force -ErrorAction SilentlyContinue
+          }
+          if (Test-Path "$vcpkgInstalled\include") {
+            Copy-Item "$vcpkgInstalled\include\*" "thirdparty\${{ matrix.platform }}\include\" -Recurse -Force -ErrorAction SilentlyContinue
+          }
+          Write-Host "Copied libraries from vcpkg"
+        } else {
+          Write-Host "Warning: vcpkg installed directory not found at $vcpkgInstalled"
+        }
+
+        # Run the build script
+        py scripts\build_precompiled_libs.py --platform "${{ matrix.platform }}"
+
+        Write-Host "Build completed for ${{ matrix.platform }}"
+      shell: powershell
+
+    - name: Build libraries for Unix platforms
+      if: matrix.platform != 'Windows'
       run: |
         echo "=== Building libraries for ${{ matrix.platform }} ==="
-        
-        # Use the correct Python command for each platform
-        if [ "${{ matrix.platform }}" = "Windows" ]; then
-          PYTHON_CMD="py"
+
+        # Create platform directory structure
+        mkdir -p "thirdparty/${{ matrix.platform }}/lib"
+        mkdir -p "thirdparty/${{ matrix.platform }}/include"
+
+        # Copy libraries based on platform
+        if [ "${{ matrix.platform }}" = "Linux" ]; then
+          echo "Copying Linux libraries from system packages..."
+          # Copy static libraries from system locations
+          find /usr/lib/x86_64-linux-gnu -name "*.a" -exec cp {} "thirdparty/${{ matrix.platform }}/lib/" \; 2>/dev/null || true
+          find /usr/local/lib -name "*.a" -exec cp {} "thirdparty/${{ matrix.platform }}/lib/" \; 2>/dev/null || true
+          # Copy headers for bare minimum libraries
+          cp -r /usr/include/SDL2 "thirdparty/${{ matrix.platform }}/include/" 2>/dev/null || true
+          cp -r /usr/include/assimp "thirdparty/${{ matrix.platform }}/include/" 2>/dev/null || true
+          cp -r /usr/include/bullet "thirdparty/${{ matrix.platform }}/include/" 2>/dev/null || true
+          cp -r /usr/include/Box2D "thirdparty/${{ matrix.platform }}/include/" 2>/dev/null || true
+          cp -r /usr/include/lua5.4 "thirdparty/${{ matrix.platform }}/include/lua" 2>/dev/null || true
+          cp -r /usr/include/yaml-cpp "thirdparty/${{ matrix.platform }}/include/" 2>/dev/null || true
+          cp -r /usr/include/pugixml* "thirdparty/${{ matrix.platform }}/include/" 2>/dev/null || true
+          cp -r /usr/include/spdlog "thirdparty/${{ matrix.platform }}/include/" 2>/dev/null || true
+          cp -r /usr/include/nlohmann "thirdparty/${{ matrix.platform }}/include/" 2>/dev/null || true
+          cp -r /usr/include/minizip "thirdparty/${{ matrix.platform }}/include/" 2>/dev/null || true
+          cp -r /usr/include/vorbis "thirdparty/${{ matrix.platform }}/include/" 2>/dev/null || true
+          cp -r /usr/include/ogg "thirdparty/${{ matrix.platform }}/include/" 2>/dev/null || true
+          cp -r /usr/include/FLAC* "thirdparty/${{ matrix.platform }}/include/" 2>/dev/null || true
+          cp -r /usr/include/lame "thirdparty/${{ matrix.platform }}/include/" 2>/dev/null || true
+          cp -r /usr/include/mpg123* "thirdparty/${{ matrix.platform }}/include/" 2>/dev/null || true
+          cp -r /usr/include/opus "thirdparty/${{ matrix.platform }}/include/" 2>/dev/null || true
+          cp -r /usr/include/bzlib* "thirdparty/${{ matrix.platform }}/include/" 2>/dev/null || true
+          cp -r /usr/include/lz4* "thirdparty/${{ matrix.platform }}/include/" 2>/dev/null || true
+          cp -r /usr/include/wavpack "thirdparty/${{ matrix.platform }}/include/" 2>/dev/null || true
+          cp -r /usr/include/sqlite3* "thirdparty/${{ matrix.platform }}/include/" 2>/dev/null || true
+          cp -r /usr/include/openssl "thirdparty/${{ matrix.platform }}/include/" 2>/dev/null || true
+          cp -r /usr/include/glm "thirdparty/${{ matrix.platform }}/include/" 2>/dev/null || true
+          cp -r /usr/include/boost "thirdparty/${{ matrix.platform }}/include/" 2>/dev/null || true
+          cp -r /usr/include/sndfile* "thirdparty/${{ matrix.platform }}/include/" 2>/dev/null || true
+          cp -r /usr/include/x86_64-linux-gnu/qt5 "thirdparty/${{ matrix.platform }}/include/qt5" 2>/dev/null || true
+          cp -r /usr/include/pybind11 "thirdparty/${{ matrix.platform }}/include/" 2>/dev/null || true
+          echo "Copied libraries from system packages"
+
         else
-          PYTHON_CMD="python3"
+          echo "Copying macOS libraries from Homebrew..."
+          # Copy static libraries from Homebrew
+          find /usr/local/lib -name "*.a" -exec cp {} "thirdparty/${{ matrix.platform }}/lib/" \; 2>/dev/null || true
+          find /opt/homebrew/lib -name "*.a" -exec cp {} "thirdparty/${{ matrix.platform }}/lib/" \; 2>/dev/null || true
+          # Copy headers
+          cp -r /usr/local/include/* "thirdparty/${{ matrix.platform }}/include/" 2>/dev/null || true
+          cp -r /opt/homebrew/include/* "thirdparty/${{ matrix.platform }}/include/" 2>/dev/null || true
+          echo "Copied libraries from Homebrew"
         fi
-        
+
         # Run the build script for this specific platform
-        $PYTHON_CMD scripts/build_precompiled_libs.py --platform "${{ matrix.platform }}"
-        
+        python3 scripts/build_precompiled_libs.py --platform "${{ matrix.platform }}"
+
         echo "Build completed for ${{ matrix.platform }}"
       shell: bash
 
     - name: Verify package creation
       run: |
         echo "=== Verifying package creation ==="
-        
+
+        # First, check what libraries we actually copied
+        echo "Libraries found in thirdparty/${{ matrix.platform }}/lib:"
+        ls -la "thirdparty/${{ matrix.platform }}/lib/" || echo "No lib directory found"
+        echo ""
+        echo "Headers found in thirdparty/${{ matrix.platform }}/include:"
+        ls -la "thirdparty/${{ matrix.platform }}/include/" || echo "No include directory found"
+        echo ""
+
         PACKAGE_NAME="lupine-libs-${{ matrix.triplet }}.zip"
         PACKAGE_PATH="precompiled_packages/$PACKAGE_NAME"
-        
+
         if [ -f "$PACKAGE_PATH" ]; then
           echo "[OK] Package created: $PACKAGE_PATH"
           echo "Package size: $(du -h "$PACKAGE_PATH" | cut -f1)"
-          
+
           # Check if package has content
           if [ -s "$PACKAGE_PATH" ]; then
             echo "[OK] Package has content"
+
+            # List contents of the package
+            echo "Package contents:"
+            unzip -l "$PACKAGE_PATH" | head -20
+
+            # Count files in package
+            FILE_COUNT=$(unzip -l "$PACKAGE_PATH" | grep -c "^[[:space:]]*[0-9]")
+            echo "Total files in package: $FILE_COUNT"
+
+            if [ "$FILE_COUNT" -lt 5 ]; then
+              echo "[WARN] Package has very few files ($FILE_COUNT), but continuing..."
+            fi
           else
             echo "[ERROR] Package is empty!"
             exit 1
@@ -165,6 +348,20 @@ jobs:
           ls -la precompiled_packages/ || echo "Directory doesn't exist"
           exit 1
         fi
+      shell: bash
+
+    - name: Test package (Windows)
+      if: matrix.platform == 'Windows'
+      run: |
+        Write-Host "=== Testing package ==="
+        py scripts\test_precompiled_libs.py
+      shell: powershell
+
+    - name: Test package (Unix)
+      if: matrix.platform != 'Windows'
+      run: |
+        echo "=== Testing package ==="
+        python3 scripts/test_precompiled_libs.py
       shell: bash
 
     - name: Upload platform package

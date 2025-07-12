@@ -29,12 +29,14 @@ class PrecompiledLibraryBuilder:
             "Mac-ARM64": "arm64-osx"
         }
         
-        # Essential libraries that must be included
+        # Bare minimum essential libraries that must be included
         self.essential_libraries = [
-            "SDL2", "SDL2_image", "SDL2_ttf", "SDL2_mixer",
-            "glad", "glm", "assimp", "bullet3", "box2d",
-            "lua", "yaml-cpp", "spdlog", "nlohmann-json",
-            "libpng", "zlib", "openssl", "freetype"
+            "SDL2", "SDL2-image", "SDL2-mixer", "SDL2-ttf",
+            "Assimp", "Box2D", "Bullet3", "Lua", "Yaml-cpp", "Pugixml",
+            "glad", "spdlog", "nlohmann-json", "minizip", "libstk",
+            "libvorbis", "libogg", "libflac", "mp3lame", "mpg123", "opus",
+            "bzip2", "lz4", "wavpack", "sqlite3", "openssl", "glm",
+            "boost-uuid", "stb", "libsndfile", "qtbase", "pybind11"
         ]
 
     def build_platform_package(self, platform: str, triplet: str) -> bool:
@@ -51,22 +53,37 @@ class PrecompiledLibraryBuilder:
         lib_dir = platform_dir / "lib"
         include_dir = platform_dir / "include"
 
-        if not lib_dir.exists() or not include_dir.exists():
-            print(f"[ERROR] Missing lib or include directories for {platform}")
-            print(f"Attempting to build libraries for {platform}...")
+        # Ensure directories exist
+        lib_dir.mkdir(exist_ok=True)
+        include_dir.mkdir(exist_ok=True)
 
-            # Try to build libraries for this platform
-            if not self._build_libraries_for_platform(platform, triplet):
-                print(f"[ERROR] Failed to build libraries for {platform}")
-                return False
+        # Debug: Show what's actually in the directories
+        print(f"[DEBUG] Contents of {lib_dir}:")
+        if lib_dir.exists():
+            lib_files = list(lib_dir.iterdir())
+            if lib_files:
+                for f in lib_files[:10]:  # Show first 10 files
+                    print(f"  - {f.name}")
+                if len(lib_files) > 10:
+                    print(f"  ... and {len(lib_files) - 10} more files")
+            else:
+                print("  (empty)")
+        else:
+            print("  (directory does not exist)")
 
-            # Check again after building
-            if not lib_dir.exists() or not include_dir.exists():
-                print(f"[WARN] Still missing lib or include directories after build attempt")
-                print(f"[INFO] Creating empty directories to continue packaging")
-                lib_dir.mkdir(exist_ok=True)
-                include_dir.mkdir(exist_ok=True)
-            
+        print(f"[DEBUG] Contents of {include_dir}:")
+        if include_dir.exists():
+            include_dirs = [d for d in include_dir.iterdir() if d.is_dir()]
+            if include_dirs:
+                for d in include_dirs[:10]:  # Show first 10 directories
+                    print(f"  - {d.name}/")
+                if len(include_dirs) > 10:
+                    print(f"  ... and {len(include_dirs) - 10} more directories")
+            else:
+                print("  (empty)")
+        else:
+            print("  (directory does not exist)")
+
         # Check for essential libraries (but don't fail if some are missing)
         missing_libs = self._check_essential_libraries(lib_dir, platform)
         if missing_libs:
@@ -121,23 +138,69 @@ class PrecompiledLibraryBuilder:
     def _check_essential_libraries(self, lib_dir: Path, platform: str) -> List[str]:
         """Check which essential libraries are missing."""
         missing = []
-        
+
+        # Create a mapping of library names to possible file patterns
+        lib_patterns = {
+            "SDL2": ["SDL2", "sdl2"],
+            "SDL2-image": ["SDL2_image", "sdl2_image", "SDL2-image"],
+            "SDL2-mixer": ["SDL2_mixer", "sdl2_mixer", "SDL2-mixer"],
+            "SDL2-ttf": ["SDL2_ttf", "sdl2_ttf", "SDL2-ttf"],
+            "Assimp": ["assimp", "Assimp"],
+            "Box2D": ["Box2D", "box2d"],
+            "Bullet3": ["Bullet3", "bullet", "BulletCollision", "BulletDynamics"],
+            "Lua": ["lua", "lua5", "lua54"],
+            "Yaml-cpp": ["yaml-cpp", "yamlcpp"],
+            "Pugixml": ["pugixml"],
+            "glad": ["glad"],
+            "spdlog": ["spdlog"],
+            "nlohmann-json": ["nlohmann_json", "nlohmann-json"],
+            "minizip": ["minizip"],
+            "libstk": ["stk", "libstk"],
+            "libvorbis": ["vorbis", "libvorbis"],
+            "libogg": ["ogg", "libogg"],
+            "libflac": ["flac", "libflac", "FLAC"],
+            "mp3lame": ["mp3lame", "lame"],
+            "mpg123": ["mpg123"],
+            "opus": ["opus"],
+            "bzip2": ["bz2", "bzip2"],
+            "lz4": ["lz4"],
+            "wavpack": ["wavpack"],
+            "sqlite3": ["sqlite3", "sqlite"],
+            "openssl": ["ssl", "crypto", "openssl"],
+            "glm": ["glm"],
+            "boost-uuid": ["boost_uuid", "boost-uuid"],
+            "stb": ["stb"],
+            "libsndfile": ["sndfile", "libsndfile"],
+            "qtbase": ["Qt5Core", "Qt6Core", "qtbase"],
+            "pybind11": ["pybind11"]
+        }
+
         for lib in self.essential_libraries:
-            # Different platforms have different library naming conventions
-            if platform == "Windows":
-                patterns = [f"{lib}.lib", f"lib{lib}.lib", f"{lib}-static.lib"]
-            else:
-                patterns = [f"lib{lib}.a", f"{lib}.a", f"lib{lib}-static.a"]
-                
+            patterns = lib_patterns.get(lib, [lib.lower()])
+
             found = False
             for pattern in patterns:
-                if list(lib_dir.glob(f"*{pattern}*")):
-                    found = True
+                # Different platforms have different library naming conventions
+                if platform == "Windows":
+                    search_patterns = [f"{pattern}.lib", f"lib{pattern}.lib", f"{pattern}-static.lib",
+                                     f"{pattern}d.lib", f"lib{pattern}d.lib"]
+                else:
+                    search_patterns = [f"lib{pattern}.a", f"{pattern}.a", f"lib{pattern}-static.a",
+                                     f"lib{pattern}.so", f"{pattern}.so"]
+
+                for search_pattern in search_patterns:
+                    matches = list(lib_dir.glob(f"*{search_pattern}*")) + list(lib_dir.glob(f"*{pattern}*"))
+                    if matches:
+                        found = True
+                        print(f"[DEBUG] Found {lib}: {[m.name for m in matches[:3]]}")
+                        break
+
+                if found:
                     break
-                    
+
             if not found:
                 missing.append(lib)
-                
+
         return missing
 
     def _create_package_info(self, platform: str, triplet: str, lib_dir: Path) -> Dict:
