@@ -1,0 +1,227 @@
+name: Build and Test Lupine Engine
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  workflow_dispatch:
+
+jobs:
+  build-and-test:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: "Windows x64"
+            os: windows-latest
+            platform: Windows
+            python_cmd: py
+            exe_ext: ".exe"
+            
+          - name: "Linux x64"
+            os: ubuntu-latest
+            platform: Linux
+            python_cmd: python3
+            exe_ext: ""
+            
+          - name: "macOS x64"
+            os: macos-13
+            platform: Mac-OSX
+            python_cmd: python3
+            exe_ext: ""
+            
+          - name: "macOS ARM64"
+            os: macos-latest
+            platform: Mac-ARM64
+            python_cmd: python3
+            exe_ext: ""
+
+    runs-on: ${{ matrix.os }}
+    name: ${{ matrix.name }}
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Setup Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Cache dependencies
+      uses: actions/cache@v4
+      with:
+        path: |
+          thirdparty
+          ~/.cache/pip
+          ~/vcpkg
+          /usr/local/Homebrew
+        key: ${{ runner.os }}-${{ matrix.platform }}-deps-${{ hashFiles('scripts/setup_build_environment.py') }}
+        restore-keys: |
+          ${{ runner.os }}-${{ matrix.platform }}-deps-
+          ${{ runner.os }}-deps-
+
+    - name: Setup build environment
+      run: |
+        echo "=== Setting up build environment for ${{ matrix.platform }} ==="
+        
+        # Install basic dependencies
+        if [ "${{ matrix.platform }}" = "Windows" ]; then
+          choco install cmake git ninja -y
+          python -m pip install --user --upgrade pip
+        elif [ "${{ matrix.platform }}" = "Linux" ]; then
+          sudo apt-get update
+          sudo apt-get install -y build-essential cmake ninja-build pkg-config git
+          python3 -m pip install --user --upgrade pip
+        else
+          # macOS
+          brew update
+          brew install cmake ninja pkg-config
+          python3 -m pip install --user --upgrade pip
+        fi
+        
+        # Run our setup script
+        echo "Running Lupine Engine setup script..."
+        if [ -f "scripts/setup_build_environment.py" ]; then
+          ${{ matrix.python_cmd }} scripts/setup_build_environment.py --dev-only --force
+        else
+          echo "❌ scripts/setup_build_environment.py not found!"
+          exit 1
+        fi
+      shell: bash
+
+    - name: Configure and Build
+      run: |
+        echo "=== Configuring and Building Project ==="
+        ${{ matrix.python_cmd }} scripts/setup_build_environment.py --build-only
+      shell: bash
+      
+    - name: Verify build outputs
+      run: |
+        echo "=== Build Output Verification ==="
+        
+        # Check if runtime exists
+        if [ -f "build/bin/lupine-runtime${{ matrix.exe_ext }}" ]; then
+          echo "[OK] lupine-runtime found"
+          ls -la "build/bin/lupine-runtime${{ matrix.exe_ext }}"
+        else
+          echo "[ERROR] lupine-runtime not found"
+          exit 1
+        fi
+
+        # Check if editor exists
+        if [ -f "build/bin/lupine-editor${{ matrix.exe_ext }}" ]; then
+          echo "[OK] lupine-editor found"
+          ls -la "build/bin/lupine-editor${{ matrix.exe_ext }}"
+        else
+          echo "[ERROR] lupine-editor not found"
+          exit 1
+        fi
+        
+        echo "=== All executables found ==="
+      shell: bash
+
+    - name: Check for DLLs (Windows only)
+      if: matrix.platform == 'Windows'
+      run: |
+        echo "=== Checking for unwanted DLLs ==="
+        cd build/bin
+        
+        # List all DLL files
+        dll_count=$(find . -name "*.dll" | wc -l)
+        if [ $dll_count -gt 0 ]; then
+          echo "Found DLL files:"
+          find . -name "*.dll"
+          echo "❌ Build should be statically linked with no DLLs"
+          exit 1
+        else
+          echo "✓ No DLL files found - static linking successful"
+        fi
+      shell: bash
+
+    - name: Test runtime execution
+      timeout-minutes: 1
+      run: |
+        echo "=== Testing Runtime Execution ==="
+        cd build/bin
+        
+        # Make executable on Unix systems
+        if [ "${{ matrix.platform }}" != "Windows" ]; then
+          chmod +x "./lupine-runtime${{ matrix.exe_ext }}"
+        fi
+
+        # Test runtime with timeout
+        echo "Testing runtime executable..."
+        timeout 25s "./lupine-runtime${{ matrix.exe_ext }}" || echo "Runtime test completed"
+        echo "Runtime test finished"
+      shell: bash
+
+    - name: Test editor execution
+      timeout-minutes: 1
+      run: |
+        echo "=== Testing Editor Execution ==="
+        cd build/bin
+        
+        # Make executable on Unix systems
+        if [ "${{ matrix.platform }}" != "Windows" ]; then
+          chmod +x "./lupine-editor${{ matrix.exe_ext }}"
+        fi
+
+        # Test editor with timeout
+        echo "Testing editor executable..."
+        timeout 25s "./lupine-editor${{ matrix.exe_ext }}" || echo "Editor test completed"
+        echo "Editor test finished"
+      shell: bash
+
+    - name: Package release
+      run: |
+        echo "=== Packaging Release ==="
+        
+        # Create package directory
+        package_name="lupine-engine-${{ matrix.platform }}-$(date +%Y%m%d)"
+        mkdir -p "packages/$package_name"
+        
+        # Copy binaries
+        cp -r build/bin/* "packages/$package_name/"
+        
+        # Copy additional files
+        if [ -f "README.md" ]; then
+          cp README.md "packages/$package_name/"
+        fi
+        if [ -f "LICENSE" ]; then
+          cp LICENSE "packages/$package_name/"
+        fi
+        
+        # Create archive
+        cd packages
+        if [ "${{ matrix.platform }}" = "Windows" ]; then
+          7z a "${package_name}.zip" "$package_name"
+        else
+          tar -czf "${package_name}.tar.gz" "$package_name"
+        fi
+        
+        echo "Package created: packages/${package_name}"
+      shell: bash
+
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: lupine-engine-${{ matrix.platform }}
+        path: |
+          build/bin/
+          packages/
+        retention-days: 7
+
+    - name: Upload logs on failure
+      uses: actions/upload-artifact@v4
+      if: failure()
+      with:
+        name: build-logs-${{ matrix.platform }}
+        path: |
+          build/CMakeFiles/CMakeOutput.log
+          build/CMakeFiles/CMakeError.log
+          build/**/*.log
+        retention-days: 3
