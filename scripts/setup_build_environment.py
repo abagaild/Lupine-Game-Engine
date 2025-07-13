@@ -1356,24 +1356,51 @@ message(STATUS "Third-party Directory: ${THIRDPARTY_DIR}")
             # Check vcpkg Python installation
             vcpkg_python = self.thirdparty_dir / "vcpkg" / "installed" / self.system_info['triplet'] / "include" / "Python.h"
             platform_python = self.thirdparty_dir / "Windows" / "python3_x64-windows-static" / "include" / "Python.h"
+            platform_python_subdir = self.thirdparty_dir / "Windows" / "python3_x64-windows-static" / "include" / "python3.12" / "Python.h"
 
             # Also check for python3 subdirectory (common in vcpkg)
             vcpkg_python_subdir = self.thirdparty_dir / "vcpkg" / "installed" / self.system_info['triplet'] / "include" / "python3.12" / "Python.h"
             vcpkg_python_generic = self.thirdparty_dir / "vcpkg" / "installed" / self.system_info['triplet'] / "include" / "python3" / "Python.h"
 
-            if not (vcpkg_python.exists() or platform_python.exists() or vcpkg_python_subdir.exists() or vcpkg_python_generic.exists()):
+            python_headers_found = (vcpkg_python.exists() or platform_python.exists() or
+                                  platform_python_subdir.exists() or vcpkg_python_subdir.exists() or
+                                  vcpkg_python_generic.exists())
+
+            if not python_headers_found:
                 missing_deps.append("Python development headers")
+            else:
+                print(f"[OK] Python development headers found")
+                if platform_python_subdir.exists():
+                    print(f"     Using platform Python headers: {platform_python_subdir}")
+                elif vcpkg_python_subdir.exists():
+                    print(f"     Using vcpkg Python headers: {vcpkg_python_subdir}")
+                elif platform_python.exists():
+                    print(f"     Using platform Python headers: {platform_python}")
+                elif vcpkg_python.exists():
+                    print(f"     Using vcpkg Python headers: {vcpkg_python}")
 
             # Check pybind11
             vcpkg_pybind11 = self.thirdparty_dir / "vcpkg" / "installed" / self.system_info['triplet'] / "include" / "pybind11" / "pybind11.h"
             platform_pybind11 = self.thirdparty_dir / "Windows" / "pybind11_x64-windows" / "include" / "pybind11" / "pybind11.h"
-            if not (vcpkg_pybind11.exists() or platform_pybind11.exists()):
+            platform_pybind11_alt = self.thirdparty_dir / "Windows" / "pybind11" / "include" / "pybind11" / "pybind11.h"
+
+            pybind11_found = (vcpkg_pybind11.exists() or platform_pybind11.exists() or platform_pybind11_alt.exists())
+
+            if not pybind11_found:
                 missing_deps.append("pybind11 headers")
+            else:
+                print(f"[OK] pybind11 headers found")
+                if platform_pybind11.exists():
+                    print(f"     Using platform pybind11: {platform_pybind11}")
+                elif platform_pybind11_alt.exists():
+                    print(f"     Using platform pybind11: {platform_pybind11_alt}")
+                elif vcpkg_pybind11.exists():
+                    print(f"     Using vcpkg pybind11: {vcpkg_pybind11}")
         else:
             # For macOS and Linux, check system installations
             try:
                 import pybind11
-                pybind11_found = True
+                print(f"[OK] pybind11 Python package found")
             except ImportError:
                 missing_deps.append("pybind11 Python package")
 

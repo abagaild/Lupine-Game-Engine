@@ -524,11 +524,17 @@ if(WIN32)
         target_link_directories(LupineEngine PRIVATE "${PLATFORM_DIR}/mpg123_x64-windows-static/lib")
     endif()
 
-    find_library(MP3LAME_LIB NAMES mp3lame PATHS "${PLATFORM_DIR}/mp3lame_x64-windows-static/lib" NO_DEFAULT_PATH)
+    find_library(MP3LAME_LIB NAMES libmp3lame-static PATHS "${PLATFORM_DIR}/mp3lame_x64-windows-static/lib" NO_DEFAULT_PATH)
     if(MP3LAME_LIB)
         list(APPEND ENGINE_LIBRARIES ${MP3LAME_LIB})
         message(STATUS "Found mp3lame: ${MP3LAME_LIB}")
         target_link_directories(LupineEngine PRIVATE "${PLATFORM_DIR}/mp3lame_x64-windows-static/lib")
+    endif()
+
+    find_library(MPGHIP_LIB NAMES libmpghip-static PATHS "${PLATFORM_DIR}/mp3lame_x64-windows-static/lib" NO_DEFAULT_PATH)
+    if(MPGHIP_LIB)
+        list(APPEND ENGINE_LIBRARIES ${MPGHIP_LIB})
+        message(STATUS "Found mpghip: ${MPGHIP_LIB}")
     endif()
 endif()
 
