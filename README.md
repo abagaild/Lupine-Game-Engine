@@ -47,4 +47,4 @@ There are many ways you can contribute to the project, and they're all ever valu
 ## Documentation and Demo Project
 (Demo Project coming soon)
 </br> </br> 
-Documentation can be accessed in the [GitHub Wiki](https://kurokamori.itch.io/)
+Documentation can be accessed in the [GitHub Wiki](https://github.com/Kurokamori/Lupine-Game-Engine/wiki)
