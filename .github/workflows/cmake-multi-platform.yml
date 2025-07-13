@@ -15,27 +15,23 @@ jobs:
         include:
           - name: "Windows x64"
             os: windows-latest
-            platform: windows
-            triplet: x64-windows-static
-            build_type: Release
-            
+            platform: Windows
+            python_cmd: py
+
           - name: "Linux x64"
             os: ubuntu-latest
-            platform: linux
-            triplet: x64-linux
-            build_type: Release
-            
+            platform: Linux
+            python_cmd: python3
+
           - name: "macOS x64"
             os: macos-13
-            platform: macos
-            triplet: x64-osx
-            build_type: Release
-            
+            platform: Mac-OSX
+            python_cmd: python3
+
           - name: "macOS ARM64"
             os: macos-latest
-            platform: macos
-            triplet: arm64-osx
-            build_type: Release
+            platform: Mac-ARM64
+            python_cmd: python3
 
     runs-on: ${{ matrix.os }}
     name: ${{ matrix.name }}
@@ -59,9 +55,9 @@ jobs:
           ~/.cache/pip
           ~/vcpkg
           /usr/local/Homebrew
-        key: ${{ runner.os }}-${{ matrix.triplet }}-deps-${{ hashFiles('scripts/setup_build_environment.py') }}
+        key: ${{ runner.os }}-${{ matrix.platform }}-deps-${{ hashFiles('scripts/setup_build_environment.py') }}
         restore-keys: |
-          ${{ runner.os }}-${{ matrix.triplet }}-deps-
+          ${{ runner.os }}-${{ matrix.platform }}-deps-
           ${{ runner.os }}-deps-
 
     - name: Install system dependencies (Windows)
