@@ -347,6 +347,24 @@ message(STATUS "=== Library Configuration ===")
 # Add our custom CMake modules to the path
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
+# Add package share directories to CMAKE_MODULE_PATH for Find modules
+if(EXISTS "${PLATFORM_DIR}")
+  file(GLOB PLATFORM_PACKAGES "${PLATFORM_DIR}/*")
+  foreach(package IN LISTS PLATFORM_PACKAGES)
+    if(IS_DIRECTORY "${package}")
+      # Add share directories that might contain Find modules
+      if(EXISTS "${package}/share")
+        file(GLOB SHARE_SUBDIRS "${package}/share/*")
+        foreach(share_subdir IN LISTS SHARE_SUBDIRS)
+          if(IS_DIRECTORY "${share_subdir}")
+            list(APPEND CMAKE_MODULE_PATH "${share_subdir}")
+          endif()
+        endforeach()
+      endif()
+    endif()
+  endforeach()
+endif()
+
 # Modern CMake approach using vcpkg targets
 set(ENGINE_LIBRARIES)
 
@@ -424,6 +442,33 @@ list(APPEND ENGINE_LIBRARIES lua)
 message(STATUS "Found Lua")
 
 # Python and pybind11 for Python scripting support
+# Set Python hints for our thirdparty installation
+if(WIN32)
+  # Use static Python for libraries and regular Python for interpreter
+  set(PYTHON_STATIC_DIR "${PLATFORM_DIR}/python3_x64-windows-static")
+  set(PYTHON_REGULAR_DIR "${PLATFORM_DIR}/python3_x64-windows")
+
+  # Set Python executable path
+  set(Python3_EXECUTABLE "${PYTHON_REGULAR_DIR}/tools/python3/python.exe")
+
+  # Set Python development paths (prefer static for linking)
+  if(EXISTS "${PYTHON_STATIC_DIR}")
+    set(Python3_INCLUDE_DIR "${PYTHON_STATIC_DIR}/include/python3.12")
+    set(Python3_LIBRARY "${PYTHON_STATIC_DIR}/lib/python312.lib")
+    set(Python3_ROOT_DIR "${PYTHON_STATIC_DIR}")
+  else()
+    set(Python3_INCLUDE_DIR "${PYTHON_REGULAR_DIR}/include/python3.12")
+    set(Python3_LIBRARY "${PYTHON_REGULAR_DIR}/lib/python312.lib")
+    set(Python3_ROOT_DIR "${PYTHON_REGULAR_DIR}")
+  endif()
+
+  message(STATUS "Python3 configuration:")
+  message(STATUS "  Executable: ${Python3_EXECUTABLE}")
+  message(STATUS "  Include dir: ${Python3_INCLUDE_DIR}")
+  message(STATUS "  Library: ${Python3_LIBRARY}")
+  message(STATUS "  Root dir: ${Python3_ROOT_DIR}")
+endif()
+
 find_package(Python3 COMPONENTS Interpreter Development REQUIRED)
 find_package(pybind11 CONFIG REQUIRED)
 list(APPEND ENGINE_LIBRARIES Python3::Python pybind11::headers)
