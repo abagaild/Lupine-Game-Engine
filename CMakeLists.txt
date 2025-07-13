@@ -370,7 +370,8 @@ set(ENGINE_LIBRARIES)
 
 # SDL2 Libraries
 find_package(SDL2 CONFIG REQUIRED)
-list(APPEND ENGINE_LIBRARIES SDL2::SDL2-static SDL2::SDL2main)
+list(APPEND ENGINE_LIBRARIES SDL2::SDL2-static)
+set(SDL2_MAIN_LIBRARY SDL2::SDL2main)  # Separate SDL2main for runtime only
 message(STATUS "Found SDL2")
 
 find_package(SDL2_image CONFIG REQUIRED)
@@ -456,6 +457,8 @@ if(WIN32)
     set(Python3_INCLUDE_DIR "${PYTHON_STATIC_DIR}/include/python3.12")
     set(Python3_LIBRARY "${PYTHON_STATIC_DIR}/lib/python312.lib")
     set(Python3_ROOT_DIR "${PYTHON_STATIC_DIR}")
+    # Define static linking for Python
+    add_definitions(-DPy_NO_ENABLE_SHARED)
   else()
     set(Python3_INCLUDE_DIR "${PYTHON_REGULAR_DIR}/include/python3.12")
     set(Python3_LIBRARY "${PYTHON_REGULAR_DIR}/lib/python312.lib")
@@ -471,7 +474,16 @@ endif()
 
 find_package(Python3 COMPONENTS Interpreter Development REQUIRED)
 find_package(pybind11 CONFIG REQUIRED)
-list(APPEND ENGINE_LIBRARIES Python3::Python pybind11::headers)
+
+# Add additional Windows libraries required for static Python linking
+if(WIN32)
+  list(APPEND ENGINE_LIBRARIES Python3::Python pybind11::headers)
+  # Add Windows system libraries required for static Python
+  list(APPEND ENGINE_LIBRARIES ws2_32 shell32 user32 advapi32 ole32 oleaut32 uuid)
+else()
+  list(APPEND ENGINE_LIBRARIES Python3::Python pybind11::headers)
+endif()
+
 message(STATUS "Found Python3: ${Python3_VERSION}")
 message(STATUS "Found pybind11: ${pybind11_VERSION}")
 
@@ -485,6 +497,38 @@ if(WIN32)
 
         # Add library directory to linker search path
         target_link_directories(LupineEngine PRIVATE "${PLATFORM_DIR}/bzip2_x64-windows-static/lib")
+    endif()
+
+    # Add libsndfile library and its dependencies
+    find_library(SNDFILE_LIB NAMES sndfile PATHS "${PLATFORM_DIR}/libsndfile_x64-windows-static/lib" NO_DEFAULT_PATH)
+    if(SNDFILE_LIB)
+        list(APPEND ENGINE_LIBRARIES ${SNDFILE_LIB})
+        message(STATUS "Found libsndfile: ${SNDFILE_LIB}")
+
+        # Add library directory to linker search path
+        target_link_directories(LupineEngine PRIVATE "${PLATFORM_DIR}/libsndfile_x64-windows-static/lib")
+    endif()
+
+    # Add libsndfile dependencies
+    find_library(OPUS_LIB NAMES opus PATHS "${PLATFORM_DIR}/opus_x64-windows-static/lib" NO_DEFAULT_PATH)
+    if(OPUS_LIB)
+        list(APPEND ENGINE_LIBRARIES ${OPUS_LIB})
+        message(STATUS "Found opus: ${OPUS_LIB}")
+        target_link_directories(LupineEngine PRIVATE "${PLATFORM_DIR}/opus_x64-windows-static/lib")
+    endif()
+
+    find_library(MPG123_LIB NAMES mpg123 PATHS "${PLATFORM_DIR}/mpg123_x64-windows-static/lib" NO_DEFAULT_PATH)
+    if(MPG123_LIB)
+        list(APPEND ENGINE_LIBRARIES ${MPG123_LIB})
+        message(STATUS "Found mpg123: ${MPG123_LIB}")
+        target_link_directories(LupineEngine PRIVATE "${PLATFORM_DIR}/mpg123_x64-windows-static/lib")
+    endif()
+
+    find_library(MP3LAME_LIB NAMES mp3lame PATHS "${PLATFORM_DIR}/mp3lame_x64-windows-static/lib" NO_DEFAULT_PATH)
+    if(MP3LAME_LIB)
+        list(APPEND ENGINE_LIBRARIES ${MP3LAME_LIB})
+        message(STATUS "Found mp3lame: ${MP3LAME_LIB}")
+        target_link_directories(LupineEngine PRIVATE "${PLATFORM_DIR}/mp3lame_x64-windows-static/lib")
     endif()
 endif()
 
@@ -597,12 +641,24 @@ if(WIN32)
   target_sources(lupine-runtime PRIVATE "src/runtime/resources/lupine-runtime.rc")
 endif()
 
-target_link_libraries(lupine-runtime PRIVATE LupineEngine)
+target_link_libraries(lupine-runtime PRIVATE LupineEngine ${SDL2_MAIN_LIBRARY})
 set_target_properties(lupine-runtime PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
 
 # Add library directories for runtime target
 if(WIN32 AND BZIP2_LIB)
     target_link_directories(lupine-runtime PRIVATE "${PLATFORM_DIR}/bzip2_x64-windows-static/lib")
+endif()
+if(WIN32 AND SNDFILE_LIB)
+    target_link_directories(lupine-runtime PRIVATE "${PLATFORM_DIR}/libsndfile_x64-windows-static/lib")
+endif()
+if(WIN32 AND OPUS_LIB)
+    target_link_directories(lupine-runtime PRIVATE "${PLATFORM_DIR}/opus_x64-windows-static/lib")
+endif()
+if(WIN32 AND MPG123_LIB)
+    target_link_directories(lupine-runtime PRIVATE "${PLATFORM_DIR}/mpg123_x64-windows-static/lib")
+endif()
+if(WIN32 AND MP3LAME_LIB)
+    target_link_directories(lupine-runtime PRIVATE "${PLATFORM_DIR}/mp3lame_x64-windows-static/lib")
 endif()
 
 #--- Qt Editor Executable ---
@@ -634,6 +690,7 @@ if(LUPINE_ENABLE_EDITOR AND Qt6_FOUND)
   # Link libraries
   target_link_libraries(lupine-editor PRIVATE
     LupineEngine
+    ${ENGINE_LIBRARIES}
   )
 
   # Link Qt6 components that were found
@@ -677,6 +734,23 @@ if(LUPINE_ENABLE_EDITOR AND Qt6_FOUND)
     WIN32_EXECUTABLE TRUE
     MACOSX_BUNDLE TRUE
   )
+
+  # Add library directories for editor target
+  if(WIN32 AND BZIP2_LIB)
+      target_link_directories(lupine-editor PRIVATE "${PLATFORM_DIR}/bzip2_x64-windows-static/lib")
+  endif()
+  if(WIN32 AND SNDFILE_LIB)
+      target_link_directories(lupine-editor PRIVATE "${PLATFORM_DIR}/libsndfile_x64-windows-static/lib")
+  endif()
+  if(WIN32 AND OPUS_LIB)
+      target_link_directories(lupine-editor PRIVATE "${PLATFORM_DIR}/opus_x64-windows-static/lib")
+  endif()
+  if(WIN32 AND MPG123_LIB)
+      target_link_directories(lupine-editor PRIVATE "${PLATFORM_DIR}/mpg123_x64-windows-static/lib")
+  endif()
+  if(WIN32 AND MP3LAME_LIB)
+      target_link_directories(lupine-editor PRIVATE "${PLATFORM_DIR}/mp3lame_x64-windows-static/lib")
+  endif()
 
   message(STATUS "Editor executable configured")
 else()

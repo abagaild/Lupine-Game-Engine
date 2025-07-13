@@ -34,7 +34,7 @@
 #include "dialogs/MenuBuilderDialog.h"
 #include "dialogs/LocalizationSettingsDialog.h"
 #include "dialogs/LocalizationTablesDialog.h"
-#include "lupine/editor/dialogs/ScriptableObjectsDialog.h"
+#include "dialogs/ScriptableObjectsDialog.h"
 #include "dialogs/AudioMixerDialog.h"
 #include "dialogs/TerrainPainterDialog.h"
 #include "widgets/GameRunnerToolbar.h"

@@ -1,4 +1,4 @@
-#include "lupine/editor/dialogs/ScriptableObjectsDialog.h"
+#include "ScriptableObjectsDialog.h"
 #include "lupine/scriptableobjects/ScriptableObjectManager.h"
 #include <QApplication>
 #include <QMessageBox>
