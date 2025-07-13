@@ -73,6 +73,9 @@ jobs:
         # Install Python packages needed for aqtinstall
         python -m pip install --user --upgrade pip
 
+        # Install Python development headers via vcpkg
+        Write-Host "Installing Python development headers..."
+
         # Ensure Visual Studio is available
         Write-Host "Visual Studio installation check..."
         if (Get-Command "cl.exe" -ErrorAction SilentlyContinue) {
