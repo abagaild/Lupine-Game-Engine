@@ -229,7 +229,7 @@ void Model::LoadModel(const std::string& path) {
 
     // Set import settings for better error handling and performance
     importer.SetPropertyInteger(AI_CONFIG_PP_LBW_MAX_WEIGHTS, 4); // Limit bone weights to 4 per vertex
-    importer.SetPropertyFloat(AI_CONFIG_PP_GSN_DEFAULT_SMOOTHING_ANGLE, 80.0f); // Smoothing angle for normal generation
+    importer.SetPropertyFloat(AI_CONFIG_PP_GSN_MAX_SMOOTHING_ANGLE, 80.0f); // Smoothing angle for normal generation
 
     const aiScene* scene = importer.ReadFile(path,
         aiProcess_Triangulate |

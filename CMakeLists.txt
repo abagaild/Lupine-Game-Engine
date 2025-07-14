@@ -78,6 +78,19 @@ endif()
 # Set third-party directory
 set(THIRDPARTY_DIR "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty")
 
+# Platform-specific thirdparty directories
+if(WIN32)
+    set(PLATFORM_THIRDPARTY_DIR "${THIRDPARTY_DIR}/Windows")
+elseif(APPLE)
+    if(CMAKE_SYSTEM_PROCESSOR MATCHES "arm64")
+        set(PLATFORM_THIRDPARTY_DIR "${THIRDPARTY_DIR}/Mac-ARM64")
+    else()
+        set(PLATFORM_THIRDPARTY_DIR "${THIRDPARTY_DIR}/Mac-OSX")
+    endif()
+else()
+    set(PLATFORM_THIRDPARTY_DIR "${THIRDPARTY_DIR}/Linux")
+endif()
+
 # Find required packages (PkgConfig not needed on Windows)
 if(NOT WIN32)
     find_package(PkgConfig REQUIRED)
@@ -87,69 +100,43 @@ endif()
 # Include both Windows and Linux library paths for cross-platform export support
 list(APPEND CMAKE_PREFIX_PATH
     # Linux static libraries (for Linux builds and Windows->Linux export)
-    "${THIRDPARTY_DIR}/linux_x64-static/sdl2"
-    "${THIRDPARTY_DIR}/linux_x64-static/sdl2-image"
-    "${THIRDPARTY_DIR}/linux_x64-static/sdl2-ttf"
-    "${THIRDPARTY_DIR}/linux_x64-static/sdl2-mixer"
-    "${THIRDPARTY_DIR}/linux_x64-static/assimp"
-    "${THIRDPARTY_DIR}/linux_x64-static/box2d"
-    "${THIRDPARTY_DIR}/linux_x64-static/bullet3"
-    "${THIRDPARTY_DIR}/linux_x64-static/lua"
-    "${THIRDPARTY_DIR}/linux_x64-static/yaml-cpp"
-    "${THIRDPARTY_DIR}/linux_x64-static/pugixml"
-    "${THIRDPARTY_DIR}/linux_x64-static/python3"
-    "${THIRDPARTY_DIR}/linux_x64-static/glad"
-    "${THIRDPARTY_DIR}/linux_x64-static/spdlog"
-    "${THIRDPARTY_DIR}/linux_x64-static/nlohmann-json"
-    # Windows static libraries (existing)
-    "${THIRDPARTY_DIR}/minizip_x64-windows-static"
-    "${THIRDPARTY_DIR}/minizip_x64-windows"
-    "${THIRDPARTY_DIR}/sdl2_x64-windows-static"
-    "${THIRDPARTY_DIR}/sdl2-image_x64-windows-static"
-    "${THIRDPARTY_DIR}/sdl2-ttf_x64-windows-static"
-    "${THIRDPARTY_DIR}/sdl2-mixer_x64-windows-static"
-    "${THIRDPARTY_DIR}/libstk_x64-windows-static"
-    "${THIRDPARTY_DIR}/libvorbis_x64-windows-static"
-    "${THIRDPARTY_DIR}/libogg_x64-windows-static"
-    "${THIRDPARTY_DIR}/libflac_x64-windows-static"
-    "${THIRDPARTY_DIR}/mp3lame_x64-windows-static"
-    "${THIRDPARTY_DIR}/mpg123_x64-windows-static"
-    "${THIRDPARTY_DIR}/opus_x64-windows-static"
-    "${THIRDPARTY_DIR}/bzip2_x64-windows-static"
-    "${THIRDPARTY_DIR}/libjpeg-turbo_x64-windows-static"
-    "${THIRDPARTY_DIR}/lz4_x64-windows-static"
-    "${THIRDPARTY_DIR}/wavpack_x64-windows-static"
-    "${THIRDPARTY_DIR}/sqlite3_x64-windows-static"
-    "${THIRDPARTY_DIR}/openssl_x64-windows-static"
-    "${THIRDPARTY_DIR}/glm_x64-windows"
-    "${THIRDPARTY_DIR}/sdl2_x64-windows"
-    "${THIRDPARTY_DIR}/sdl2-image_x64-windows"
-    "${THIRDPARTY_DIR}/sdl2-ttf_x64-windows"
-    "${THIRDPARTY_DIR}/sdl2-mixer_x64-windows"
-    "${THIRDPARTY_DIR}/libstk_x64-windows"
-    "${THIRDPARTY_DIR}/libvorbis_x64-windows"
-    "${THIRDPARTY_DIR}/libogg_x64-windows"
-    "${THIRDPARTY_DIR}/libflac_x64-windows"
-    "${THIRDPARTY_DIR}/mp3lame_x64-windows"
-    "${THIRDPARTY_DIR}/mpg123_x64-windows"
-    "${THIRDPARTY_DIR}/opus_x64-windows"
-    "${THIRDPARTY_DIR}/assimp_x64-windows-static"
-    "${THIRDPARTY_DIR}/assimp_x64-windows"
-    "${THIRDPARTY_DIR}/yaml-cpp_x64-windows"
-    "${THIRDPARTY_DIR}/boost-uuid_x64-windows"
-    "${THIRDPARTY_DIR}/nlohmann-json_x64-windows"
-    "${THIRDPARTY_DIR}/lua_x64-windows-static"
-    "${THIRDPARTY_DIR}/lua_x64-windows"
-    "${THIRDPARTY_DIR}/python3_x64-windows-static"
-    "${THIRDPARTY_DIR}/python3_x64-windows"
-    "${THIRDPARTY_DIR}/glad_x64-windows"
-    "${THIRDPARTY_DIR}/stb_x64-windows-static"
-    "${THIRDPARTY_DIR}/stb_x64-windows"
-    "${THIRDPARTY_DIR}/spdlog_x64-windows"
-    "${THIRDPARTY_DIR}/libsndfile_x64-windows-static"
-    "${THIRDPARTY_DIR}/libsndfile_x64-windows"
-    "${THIRDPARTY_DIR}/box2D"
-    "${THIRDPARTY_DIR}/bullet3_x64-windows"
+    "${THIRDPARTY_DIR}/Linux/lib"
+    "${THIRDPARTY_DIR}/Linux/include"
+    # Windows static libraries (current platform)
+    "${PLATFORM_THIRDPARTY_DIR}/minizip_x64-windows-static"
+    "${PLATFORM_THIRDPARTY_DIR}/minizip_x64-windows"
+    "${PLATFORM_THIRDPARTY_DIR}/sdl2_x64-windows-static"
+    "${PLATFORM_THIRDPARTY_DIR}/sdl2-image_x64-windows-static"
+    "${PLATFORM_THIRDPARTY_DIR}/sdl2-ttf_x64-windows-static"
+    "${PLATFORM_THIRDPARTY_DIR}/sdl2-mixer_x64-windows-static"
+    "${PLATFORM_THIRDPARTY_DIR}/libstk_x64-windows-static"
+    "${PLATFORM_THIRDPARTY_DIR}/libvorbis_x64-windows-static"
+    "${PLATFORM_THIRDPARTY_DIR}/libogg_x64-windows-static"
+    "${PLATFORM_THIRDPARTY_DIR}/libflac_x64-windows-static"
+    "${PLATFORM_THIRDPARTY_DIR}/mp3lame_x64-windows-static"
+    "${PLATFORM_THIRDPARTY_DIR}/mpg123_x64-windows-static"
+    "${PLATFORM_THIRDPARTY_DIR}/opus_x64-windows-static"
+    "${PLATFORM_THIRDPARTY_DIR}/bzip2_x64-windows-static"
+    "${PLATFORM_THIRDPARTY_DIR}/libjpeg-turbo_x64-windows-static"
+    "${PLATFORM_THIRDPARTY_DIR}/lz4_x64-windows-static"
+    "${PLATFORM_THIRDPARTY_DIR}/wavpack_x64-windows-static"
+    "${PLATFORM_THIRDPARTY_DIR}/sqlite3_x64-windows-static"
+    "${PLATFORM_THIRDPARTY_DIR}/openssl_x64-windows-static"
+    "${PLATFORM_THIRDPARTY_DIR}/glm_x64-windows"
+    "${PLATFORM_THIRDPARTY_DIR}/assimp_x64-windows-static"
+    "${PLATFORM_THIRDPARTY_DIR}/yaml-cpp_x64-windows"
+    "${PLATFORM_THIRDPARTY_DIR}/boost-uuid_x64-windows"
+    "${PLATFORM_THIRDPARTY_DIR}/nlohmann-json_x64-windows"
+    "${PLATFORM_THIRDPARTY_DIR}/lua_x64-windows-static"
+    "${PLATFORM_THIRDPARTY_DIR}/python3_x64-windows-static"
+    "${PLATFORM_THIRDPARTY_DIR}/python3_x64-windows"
+    "${PLATFORM_THIRDPARTY_DIR}/glad_x64-windows-static"
+    "${PLATFORM_THIRDPARTY_DIR}/stb_x64-windows-static"
+    "${PLATFORM_THIRDPARTY_DIR}/spdlog_x64-windows"
+    "${PLATFORM_THIRDPARTY_DIR}/libsndfile_x64-windows-static"
+    "${PLATFORM_THIRDPARTY_DIR}/box2D"
+    "${PLATFORM_THIRDPARTY_DIR}/box2d_x64-windows-static"
+    "${PLATFORM_THIRDPARTY_DIR}/bullet3_x64-windows-static"
 )
 
 # Try to find packages, but make them optional for now to get basic build working
@@ -163,23 +150,35 @@ find_package(nlohmann_json QUIET)
 find_package(spdlog QUIET)
 
 # Find Qt6 for the editor (use static version)
-set(Qt6_DIR "${THIRDPARTY_DIR}/qtbase_x64-windows-static/share/Qt6")
-set(Qt6Core_DIR "${THIRDPARTY_DIR}/qtbase_x64-windows-static/share/Qt6Core")
-set(Qt6Widgets_DIR "${THIRDPARTY_DIR}/qtbase_x64-windows-static/share/Qt6Widgets")
-set(Qt6Gui_DIR "${THIRDPARTY_DIR}/qtbase_x64-windows-static/share/Qt6Gui")
-set(Qt6OpenGL_DIR "${THIRDPARTY_DIR}/qtbase_x64-windows-static/share/Qt6OpenGL")
-set(Qt6OpenGLWidgets_DIR "${THIRDPARTY_DIR}/qtbase_x64-windows-static/share/Qt6OpenGLWidgets")
+set(Qt6_DIR "${PLATFORM_THIRDPARTY_DIR}/qtbase_x64-windows-static/share/Qt6")
+set(Qt6Core_DIR "${PLATFORM_THIRDPARTY_DIR}/qtbase_x64-windows-static/share/Qt6Core")
+set(Qt6Widgets_DIR "${PLATFORM_THIRDPARTY_DIR}/qtbase_x64-windows-static/share/Qt6Widgets")
+set(Qt6Gui_DIR "${PLATFORM_THIRDPARTY_DIR}/qtbase_x64-windows-static/share/Qt6Gui")
+set(Qt6OpenGL_DIR "${PLATFORM_THIRDPARTY_DIR}/qtbase_x64-windows-static/share/Qt6OpenGL")
+set(Qt6OpenGLWidgets_DIR "${PLATFORM_THIRDPARTY_DIR}/qtbase_x64-windows-static/share/Qt6OpenGLWidgets")
 
 # Set Qt to static linking mode and host path for cross-compilation
 # Use dynamic Qt for tools (moc, uic, rcc) but static Qt for libraries
 set(QT_USE_STATIC_LIBS ON)
-set(QT_HOST_PATH "${THIRDPARTY_DIR}/qtbase_x64-windows" CACHE PATH "Qt host path for tools")
-set(QT_HOST_PATH_CMAKE_DIR "${THIRDPARTY_DIR}/qtbase_x64-windows/share" CACHE PATH "Qt host cmake dir for tools")
+set(QT_HOST_PATH "${PLATFORM_THIRDPARTY_DIR}/qtbase_x64-windows" CACHE PATH "Qt host path for tools")
+set(QT_HOST_PATH_CMAKE_DIR "${PLATFORM_THIRDPARTY_DIR}/qtbase_x64-windows/share" CACHE PATH "Qt host cmake dir for tools")
 
-# Manually set Qt tool paths
-set(QT_MOC_EXECUTABLE "${THIRDPARTY_DIR}/qtbase_x64-windows/tools/Qt6/bin/moc.exe" CACHE FILEPATH "Path to moc executable")
-set(QT_UIC_EXECUTABLE "${THIRDPARTY_DIR}/qtbase_x64-windows/tools/Qt6/bin/uic.exe" CACHE FILEPATH "Path to uic executable")
-set(QT_RCC_EXECUTABLE "${THIRDPARTY_DIR}/qtbase_x64-windows/tools/Qt6/bin/rcc.exe" CACHE FILEPATH "Path to rcc executable")
+# Set Qt tool paths from static package
+set(Qt6_MOC_EXECUTABLE "${PLATFORM_THIRDPARTY_DIR}/qtbase_x64-windows-static/Qt6/bin/moc.exe" CACHE FILEPATH "Path to moc executable")
+set(Qt6_UIC_EXECUTABLE "${PLATFORM_THIRDPARTY_DIR}/qtbase_x64-windows-static/Qt6/bin/uic.exe" CACHE FILEPATH "Path to uic executable")
+set(Qt6_RCC_EXECUTABLE "${PLATFORM_THIRDPARTY_DIR}/qtbase_x64-windows-static/Qt6/bin/rcc.exe" CACHE FILEPATH "Path to rcc executable")
+set(CMAKE_CXX_COMPILER_LAUNCHER "")
+
+# Enable Qt AUTOMOC, AUTOUIC, and AUTORCC with explicit tool paths
+set(CMAKE_AUTOMOC ON)
+set(CMAKE_AUTOUIC ON)
+set(CMAKE_AUTORCC ON)
+
+# Set the tool executables explicitly for AUTOMOC
+set(CMAKE_AUTOMOC_MOC_OPTIONS "")
+set(CMAKE_AUTOMOC_EXECUTABLE "${PLATFORM_THIRDPARTY_DIR}/qtbase_x64-windows-static/Qt6/bin/moc.exe")
+set(CMAKE_AUTOUIC_EXECUTABLE "${PLATFORM_THIRDPARTY_DIR}/qtbase_x64-windows-static/Qt6/bin/uic.exe")
+set(CMAKE_AUTORCC_EXECUTABLE "${PLATFORM_THIRDPARTY_DIR}/qtbase_x64-windows-static/Qt6/bin/rcc.exe")
 
 # Force static linking for Qt
 add_definitions(-DQT_STATICPLUGIN)
@@ -226,6 +225,16 @@ else()
     message(STATUS "✗ Windows library embedding disabled")
 endif()
 
+# Set Qt paths - use static Qt but disable cross-compilation mode
+if(WIN32)
+    # Set Qt directory to static version
+    set(Qt6_DIR "${PLATFORM_THIRDPARTY_DIR}/qtbase_x64-windows-static/share/Qt6")
+
+    # Disable Qt's cross-compilation detection by setting this variable
+    set(QT_NO_MAKE_EXAMPLES ON)
+    set(QT_NO_MAKE_TESTS ON)
+endif()
+
 # Try to find Qt6
 find_package(Qt6 QUIET COMPONENTS Core Widgets Gui OpenGL OpenGLWidgets)
 
@@ -254,112 +263,74 @@ endif()
 # Include directories
 include_directories(
     "${CMAKE_CURRENT_SOURCE_DIR}/include"
-    "${THIRDPARTY_DIR}/Sol"
-    "${THIRDPARTY_DIR}/pybind11_x64-windows/include"
-    "${THIRDPARTY_DIR}/lua_x64-windows-static/include"
-    "${THIRDPARTY_DIR}/lua_x64-windows/include"
-    "${THIRDPARTY_DIR}/python3_x64-windows-static/include"
-    "${THIRDPARTY_DIR}/python3_x64-windows/include"
-    "${THIRDPARTY_DIR}/python3_x64-windows-static/include/python3.12"
-    "${THIRDPARTY_DIR}/python3_x64-windows/include/python3.12"
-    "${THIRDPARTY_DIR}/glad_x64-windows/include"
-    "${THIRDPARTY_DIR}/stb_x64-windows/include"
-    "${THIRDPARTY_DIR}/boost-headers_x64-windows/include"
-    "${THIRDPARTY_DIR}/boost-config_x64-windows/include"
-    "${THIRDPARTY_DIR}/boost-uuid_x64-windows/include"
-    "${THIRDPARTY_DIR}/boost-type-traits_x64-windows/include"
-    "${THIRDPARTY_DIR}/boost-assert_x64-windows/include"
-    "${THIRDPARTY_DIR}/boost-static-assert_x64-windows/include"
-    "${THIRDPARTY_DIR}/boost-throw-exception_x64-windows/include"
-    "${THIRDPARTY_DIR}/glm_x64-windows/include"
-    "${THIRDPARTY_DIR}/assimp_x64-windows-static/include"
-    "${THIRDPARTY_DIR}/assimp_x64-windows/include"
-    "${THIRDPARTY_DIR}/yaml-cpp_x64-windows/include"
-    "${THIRDPARTY_DIR}/nlohmann-json_x64-windows/include"
-    "${THIRDPARTY_DIR}/spdlog_x64-windows/include"
-    "${THIRDPARTY_DIR}/libsndfile_x64-windows-static/include"
-    "${THIRDPARTY_DIR}/libsndfile_x64-windows/include"
-    "${THIRDPARTY_DIR}/sdl2_x64-windows-static/include"
-    "${THIRDPARTY_DIR}/sdl2_x64-windows-static/include/SDL2"
-    "${THIRDPARTY_DIR}/sdl2_x64-windows/include"
-    "${THIRDPARTY_DIR}/sdl2_x64-windows/include/SDL2"
-    "${THIRDPARTY_DIR}/sdl2-image_x64-windows-static/include"
-    "${THIRDPARTY_DIR}/sdl2-image_x64-windows-static/include/SDL2"
-    "${THIRDPARTY_DIR}/sdl2-image_x64-windows/include"
-    "${THIRDPARTY_DIR}/sdl2-image_x64-windows/include/SDL2"
-    "${THIRDPARTY_DIR}/sdl2-ttf_x64-windows-static/include"
-    "${THIRDPARTY_DIR}/sdl2-ttf_x64-windows-static/include/SDL2"
-    "${THIRDPARTY_DIR}/sdl2-ttf_x64-windows/include"
-    "${THIRDPARTY_DIR}/sdl2-ttf_x64-windows/include/SDL2"
-    "${THIRDPARTY_DIR}/sdl2-mixer_x64-windows-static/include"
-    "${THIRDPARTY_DIR}/sdl2-mixer_x64-windows-static/include/SDL2"
-    "${THIRDPARTY_DIR}/sdl2-mixer_x64-windows/include"
-    "${THIRDPARTY_DIR}/sdl2-mixer_x64-windows/include/SDL2"
-    "${THIRDPARTY_DIR}/libstk_x64-windows-static/include"
-    "${THIRDPARTY_DIR}/libstk_x64-windows/include"
-    "${THIRDPARTY_DIR}/libvorbis_x64-windows-static/include"
-    "${THIRDPARTY_DIR}/libvorbis_x64-windows/include"
-    "${THIRDPARTY_DIR}/libogg_x64-windows-static/include"
-    "${THIRDPARTY_DIR}/libogg_x64-windows/include"
-    "${THIRDPARTY_DIR}/libflac_x64-windows-static/include"
-    "${THIRDPARTY_DIR}/libflac_x64-windows/include"
-    "${THIRDPARTY_DIR}/mp3lame_x64-windows-static/include"
-    "${THIRDPARTY_DIR}/mp3lame_x64-windows/include"
-    "${THIRDPARTY_DIR}/mpg123_x64-windows-static/include"
-    "${THIRDPARTY_DIR}/mpg123_x64-windows/include"
-    "${THIRDPARTY_DIR}/opus_x64-windows-static/include"
-    "${THIRDPARTY_DIR}/opus_x64-windows/include"
-    "${THIRDPARTY_DIR}/sdl2-image_x64-windows/include"
-    "${THIRDPARTY_DIR}/sdl2-ttf_x64-windows/include"
-    "${THIRDPARTY_DIR}/qtbase_x64-windows-static/include"
-    "${THIRDPARTY_DIR}/qtbase_x64-windows-static/include/QtCore"
-    "${THIRDPARTY_DIR}/qtbase_x64-windows-static/include/QtWidgets"
-    "${THIRDPARTY_DIR}/qtbase_x64-windows-static/include/QtGui"
-    "${THIRDPARTY_DIR}/qtbase_x64-windows-static/include/QtOpenGL"
-    "${THIRDPARTY_DIR}/qtbase_x64-windows-static/include/QtOpenGLWidgets"
-    "${THIRDPARTY_DIR}/qtbase_x64-windows/include"
-    "${THIRDPARTY_DIR}/qtbase_x64-windows/include/QtCore"
-    "${THIRDPARTY_DIR}/qtbase_x64-windows/include/QtWidgets"
-    "${THIRDPARTY_DIR}/qtbase_x64-windows/include/QtGui"
-    "${THIRDPARTY_DIR}/qtbase_x64-windows/include/QtOpenGL"
-    "${THIRDPARTY_DIR}/qtbase_x64-windows/include/QtOpenGLWidgets"
-    "${THIRDPARTY_DIR}/glad_x64-windows-static/include"
-    "${THIRDPARTY_DIR}/glad_x64-windows/include"
-    "${THIRDPARTY_DIR}/opengl_x64-windows/include"
-    "${THIRDPARTY_DIR}/box2D_x64-windows-static/include"
-    "${THIRDPARTY_DIR}/box2D/include"
-    "${THIRDPARTY_DIR}/bullet3_x64-windows-static/include"
-    "${THIRDPARTY_DIR}/bullet3_x64-windows/include"
-    "${THIRDPARTY_DIR}/polyclipping_x64-windows-static/include"
-    "${THIRDPARTY_DIR}/polyclipping_x64-windows/include"
-    "${THIRDPARTY_DIR}/minizip_x64-windows-static/include"
-    "${THIRDPARTY_DIR}/minizip_x64-windows/include"
-    "${THIRDPARTY_DIR}/jhasse-poly2tri_x64-windows-static/include"
-    "${THIRDPARTY_DIR}/jhasse-poly2tri_x64-windows/include"
-    "${THIRDPARTY_DIR}/pugixml_x64-windows-static/include"
-    "${THIRDPARTY_DIR}/pugixml_x64-windows/include"
-    "${THIRDPARTY_DIR}/libsndfile_x64-windows-static/include"
-    "${THIRDPARTY_DIR}/libsndfile_x64-windows/include"
-    "${THIRDPARTY_DIR}/stb_x64-windows-static/include"
-    "${THIRDPARTY_DIR}/stb_x64-windows/include"
-    "${THIRDPARTY_DIR}/harfbuzz_x64-windows-static/include"
-    "${THIRDPARTY_DIR}/harfbuzz_x64-windows/include"
-    "${THIRDPARTY_DIR}/icu_x64-windows-static/include"
-    "${THIRDPARTY_DIR}/icu_x64-windows/include"
-    "${THIRDPARTY_DIR}/pcre2_x64-windows-static/include"
-    "${THIRDPARTY_DIR}/pcre2_x64-windows/include"
-    "${THIRDPARTY_DIR}/zstd_x64-windows-static/include"
-    "${THIRDPARTY_DIR}/zstd_x64-windows/include"
-    "${THIRDPARTY_DIR}/freetype_x64-windows-static/include"
-    "${THIRDPARTY_DIR}/freetype_x64-windows/include"
-    "${THIRDPARTY_DIR}/libpng_x64-windows-static/include"
-    "${THIRDPARTY_DIR}/libpng_x64-windows/include"
-    "${THIRDPARTY_DIR}/zlib_x64-windows-static/include"
-    "${THIRDPARTY_DIR}/zlib_x64-windows/include"
-    "${THIRDPARTY_DIR}/brotli_x64-windows-static/include"
-    "${THIRDPARTY_DIR}/brotli_x64-windows/include"
-    "${THIRDPARTY_DIR}/double-conversion_x64-windows-static/include"
-    "${THIRDPARTY_DIR}/double-conversion_x64-windows/include"
+    "${PLATFORM_THIRDPARTY_DIR}/Sol"
+    "${PLATFORM_THIRDPARTY_DIR}/pybind11_x64-windows/include"
+    "${PLATFORM_THIRDPARTY_DIR}/pybind11/include"
+    "${PLATFORM_THIRDPARTY_DIR}/lua_x64-windows-static/include"
+    "${PLATFORM_THIRDPARTY_DIR}/python3_x64-windows-static/include"
+    "${PLATFORM_THIRDPARTY_DIR}/python3_x64-windows/include"
+    "${PLATFORM_THIRDPARTY_DIR}/python3_x64-windows-static/include/python3.12"
+    "${PLATFORM_THIRDPARTY_DIR}/python3_x64-windows/include/python3.12"
+    "    "${PLATFORM_THIRDPARTY_DIR}/glad_x64-windows-static/include"
+    "${PLATFORM_THIRDPARTY_DIR}/egl-registry_x64-windows-static/include""
+    "${PLATFORM_THIRDPARTY_DIR}/stb_x64-windows-static/include"
+    "${PLATFORM_THIRDPARTY_DIR}/boost-headers_x64-windows/include"
+    "${PLATFORM_THIRDPARTY_DIR}/boost-config_x64-windows/include"
+    "${PLATFORM_THIRDPARTY_DIR}/boost-uuid_x64-windows/include"
+    "${PLATFORM_THIRDPARTY_DIR}/boost-type-traits_x64-windows/include"
+    "${PLATFORM_THIRDPARTY_DIR}/boost-assert_x64-windows/include"
+    "${PLATFORM_THIRDPARTY_DIR}/boost-static-assert_x64-windows/include"
+    "${PLATFORM_THIRDPARTY_DIR}/boost-throw-exception_x64-windows/include"
+    "${PLATFORM_THIRDPARTY_DIR}/glm_x64-windows/include"
+    "${PLATFORM_THIRDPARTY_DIR}/assimp_x64-windows-static/include"
+    "${PLATFORM_THIRDPARTY_DIR}/yaml-cpp_x64-windows/include"
+    "${PLATFORM_THIRDPARTY_DIR}/nlohmann-json_x64-windows/include"
+    "${PLATFORM_THIRDPARTY_DIR}/spdlog_x64-windows/include"
+    "${PLATFORM_THIRDPARTY_DIR}/libsndfile_x64-windows-static/include"
+    "${PLATFORM_THIRDPARTY_DIR}/sdl2_x64-windows-static/include"
+    "${PLATFORM_THIRDPARTY_DIR}/sdl2_x64-windows-static/include/SDL2"
+    "${PLATFORM_THIRDPARTY_DIR}/sdl2-image_x64-windows-static/include"
+    "${PLATFORM_THIRDPARTY_DIR}/sdl2-image_x64-windows-static/include/SDL2"
+    "${PLATFORM_THIRDPARTY_DIR}/sdl2-ttf_x64-windows-static/include"
+    "${PLATFORM_THIRDPARTY_DIR}/sdl2-ttf_x64-windows-static/include/SDL2"
+    "${PLATFORM_THIRDPARTY_DIR}/sdl2-mixer_x64-windows-static/include"
+    "${PLATFORM_THIRDPARTY_DIR}/sdl2-mixer_x64-windows-static/include/SDL2"
+    "${PLATFORM_THIRDPARTY_DIR}/libstk_x64-windows-static/include"
+    "${PLATFORM_THIRDPARTY_DIR}/libvorbis_x64-windows-static/include"
+    "${PLATFORM_THIRDPARTY_DIR}/libogg_x64-windows-static/include"
+    "${PLATFORM_THIRDPARTY_DIR}/libflac_x64-windows-static/include"
+    "${PLATFORM_THIRDPARTY_DIR}/mp3lame_x64-windows-static/include"
+    "${PLATFORM_THIRDPARTY_DIR}/mpg123_x64-windows-static/include"
+    "${PLATFORM_THIRDPARTY_DIR}/opus_x64-windows-static/include"
+    "${PLATFORM_THIRDPARTY_DIR}/qtbase_x64-windows-static/include"
+    "${PLATFORM_THIRDPARTY_DIR}/qtbase_x64-windows-static/include/QtCore"
+    "${PLATFORM_THIRDPARTY_DIR}/qtbase_x64-windows-static/include/QtWidgets"
+    "${PLATFORM_THIRDPARTY_DIR}/qtbase_x64-windows-static/include/QtGui"
+    "${PLATFORM_THIRDPARTY_DIR}/qtbase_x64-windows-static/include/QtOpenGL"
+    "${PLATFORM_THIRDPARTY_DIR}/qtbase_x64-windows-static/include/QtOpenGLWidgets"
+    "${PLATFORM_THIRDPARTY_DIR}/qtbase_x64-windows/include"
+    "${PLATFORM_THIRDPARTY_DIR}/qtbase_x64-windows/include/QtCore"
+    "${PLATFORM_THIRDPARTY_DIR}/qtbase_x64-windows/include/QtWidgets"
+    "${PLATFORM_THIRDPARTY_DIR}/qtbase_x64-windows/include/QtGui"
+    "${PLATFORM_THIRDPARTY_DIR}/qtbase_x64-windows/include/QtOpenGL"
+    "${PLATFORM_THIRDPARTY_DIR}/qtbase_x64-windows/include/QtOpenGLWidgets"
+    "${PLATFORM_THIRDPARTY_DIR}/opengl_x64-windows-static/include"
+    "${PLATFORM_THIRDPARTY_DIR}/box2D/include"
+    "${PLATFORM_THIRDPARTY_DIR}/box2d_x64-windows-static/include"
+    "${PLATFORM_THIRDPARTY_DIR}/bullet3_x64-windows-static/include"
+    "${PLATFORM_THIRDPARTY_DIR}/polyclipping_x64-windows-static/include"
+    "${PLATFORM_THIRDPARTY_DIR}/minizip_x64-windows-static/include"
+    "${PLATFORM_THIRDPARTY_DIR}/jhasse-poly2tri_x64-windows-static/include"
+    "${PLATFORM_THIRDPARTY_DIR}/pugixml_x64-windows-static/include"
+    "${PLATFORM_THIRDPARTY_DIR}/harfbuzz_x64-windows-static/include"
+    "${PLATFORM_THIRDPARTY_DIR}/icu_x64-windows-static/include"
+    "${PLATFORM_THIRDPARTY_DIR}/pcre2_x64-windows-static/include"
+    "${PLATFORM_THIRDPARTY_DIR}/zstd_x64-windows-static/include"
+    "${PLATFORM_THIRDPARTY_DIR}/freetype_x64-windows-static/include"
+    "${PLATFORM_THIRDPARTY_DIR}/libpng_x64-windows-static/include"
+    "${PLATFORM_THIRDPARTY_DIR}/zlib_x64-windows-static/include"
+    "${PLATFORM_THIRDPARTY_DIR}/brotli_x64-windows-static/include"
+    "${PLATFORM_THIRDPARTY_DIR}/double-conversion_x64-windows-static/include"
 )
 
 # Source files
@@ -472,7 +443,6 @@ set(ENGINE_SOURCES
     src/export/EmbeddedLibraryManager.cpp
     src/export/WebExporter.cpp
     src/export/AssetBundler.cpp
-    ${THIRDPARTY_DIR}/glad_x64-windows/include/glad/glad.c
 )
 
 # Header files
@@ -573,72 +543,43 @@ add_library(LupineEngine STATIC ${ENGINE_SOURCES} ${ENGINE_HEADERS})
 
 # Add library directories (prefer static versions)
 link_directories(
-    "${THIRDPARTY_DIR}/boost-uuid_x64-windows/lib"
-    "${THIRDPARTY_DIR}/assimp_x64-windows-static/lib"
-    "${THIRDPARTY_DIR}/assimp_x64-windows/lib"
-    "${THIRDPARTY_DIR}/yaml-cpp_x64-windows/lib"
-    "${THIRDPARTY_DIR}/spdlog_x64-windows/lib"
-    "${THIRDPARTY_DIR}/libsndfile_x64-windows/lib"
-    "${THIRDPARTY_DIR}/minizip_x64-windows-static/lib"
-    "${THIRDPARTY_DIR}/minizip_x64-windows/lib"
-    "${THIRDPARTY_DIR}/sdl2_x64-windows-static/lib"
-    "${THIRDPARTY_DIR}/sdl2-image_x64-windows-static/lib"
-    "${THIRDPARTY_DIR}/sdl2-ttf_x64-windows-static/lib"
-    "${THIRDPARTY_DIR}/sdl2-mixer_x64-windows-static/lib"
-    "${THIRDPARTY_DIR}/libstk_x64-windows-static/lib"
-    "${THIRDPARTY_DIR}/libvorbis_x64-windows-static/lib"
-    "${THIRDPARTY_DIR}/libogg_x64-windows-static/lib"
-    "${THIRDPARTY_DIR}/libflac_x64-windows-static/lib"
-    "${THIRDPARTY_DIR}/mp3lame_x64-windows-static/lib"
-    "${THIRDPARTY_DIR}/mpg123_x64-windows-static/lib"
-    "${THIRDPARTY_DIR}/opus_x64-windows-static/lib"
-    "${THIRDPARTY_DIR}/sdl2_x64-windows/lib"
-    "${THIRDPARTY_DIR}/sdl2-image_x64-windows/lib"
-    "${THIRDPARTY_DIR}/sdl2-ttf_x64-windows/lib"
-    "${THIRDPARTY_DIR}/sdl2-mixer_x64-windows/lib"
-    "${THIRDPARTY_DIR}/libstk_x64-windows/lib"
-    "${THIRDPARTY_DIR}/libvorbis_x64-windows/lib"
-    "${THIRDPARTY_DIR}/libogg_x64-windows/lib"
-    "${THIRDPARTY_DIR}/libflac_x64-windows/lib"
-    "${THIRDPARTY_DIR}/mp3lame_x64-windows/lib"
-    "${THIRDPARTY_DIR}/mpg123_x64-windows/lib"
-    "${THIRDPARTY_DIR}/opus_x64-windows/lib"
-    "${THIRDPARTY_DIR}/qtbase_x64-windows-static/lib"
-    "${THIRDPARTY_DIR}/qtbase_x64-windows/lib"
-    "${THIRDPARTY_DIR}/glad_x64-windows-static/lib"
-    "${THIRDPARTY_DIR}/glad_x64-windows/lib"
-    "${THIRDPARTY_DIR}/opengl_x64-windows-static/lib"
-    "${THIRDPARTY_DIR}/opengl_x64-windows/lib"
-    "${THIRDPARTY_DIR}/lua_x64-windows-static/lib"
-    "${THIRDPARTY_DIR}/lua_x64-windows/lib"
-    "${THIRDPARTY_DIR}/python3_x64-windows-static/lib"
-    "${THIRDPARTY_DIR}/python3_x64-windows/lib"
-    "${THIRDPARTY_DIR}/box2D_x64-windows-static/lib"
-    "${THIRDPARTY_DIR}/box2D/lib"
-    "${THIRDPARTY_DIR}/bullet3_x64-windows-static/lib"
-    "${THIRDPARTY_DIR}/bullet3_x64-windows/lib"
-    "${THIRDPARTY_DIR}/polyclipping_x64-windows-static/lib"
-    "${THIRDPARTY_DIR}/polyclipping_x64-windows/lib"
-    "${THIRDPARTY_DIR}/harfbuzz_x64-windows-static/lib"
-    "${THIRDPARTY_DIR}/harfbuzz_x64-windows/lib"
-    "${THIRDPARTY_DIR}/icu_x64-windows-static/lib"
-    "${THIRDPARTY_DIR}/icu_x64-windows/lib"
-    "${THIRDPARTY_DIR}/pcre2_x64-windows-static/lib"
-    "${THIRDPARTY_DIR}/pcre2_x64-windows/lib"
-    "${THIRDPARTY_DIR}/zstd_x64-windows-static/lib"
-    "${THIRDPARTY_DIR}/zstd_x64-windows/lib"
-    "${THIRDPARTY_DIR}/freetype_x64-windows-static/lib"
-    "${THIRDPARTY_DIR}/freetype_x64-windows/lib"
-    "${THIRDPARTY_DIR}/libpng_x64-windows-static/lib"
-    "${THIRDPARTY_DIR}/libpng_x64-windows/lib"
-    "${THIRDPARTY_DIR}/zlib_x64-windows-static/lib"
-    "${THIRDPARTY_DIR}/zlib_x64-windows/lib"
-    "${THIRDPARTY_DIR}/brotli_x64-windows-static/lib"
-    "${THIRDPARTY_DIR}/brotli_x64-windows/lib"
-    "${THIRDPARTY_DIR}/double-conversion_x64-windows-static/lib"
-    "${THIRDPARTY_DIR}/double-conversion_x64-windows/lib"
-    "${THIRDPARTY_DIR}/jhasse-poly2tri_x64-windows-static/lib"
-    "${THIRDPARTY_DIR}/jhasse-poly2tri_x64-windows/lib"
+    "${PLATFORM_THIRDPARTY_DIR}/boost-uuid_x64-windows/lib"
+    "${PLATFORM_THIRDPARTY_DIR}/assimp_x64-windows-static/lib"
+    "${PLATFORM_THIRDPARTY_DIR}/yaml-cpp_x64-windows/lib"
+    "${PLATFORM_THIRDPARTY_DIR}/spdlog_x64-windows/lib"
+    "${PLATFORM_THIRDPARTY_DIR}/minizip_x64-windows-static/lib"
+    "${PLATFORM_THIRDPARTY_DIR}/sdl2_x64-windows-static/lib"
+    "${PLATFORM_THIRDPARTY_DIR}/sdl2-image_x64-windows-static/lib"
+    "${PLATFORM_THIRDPARTY_DIR}/sdl2-ttf_x64-windows-static/lib"
+    "${PLATFORM_THIRDPARTY_DIR}/sdl2-mixer_x64-windows-static/lib"
+    "${PLATFORM_THIRDPARTY_DIR}/libstk_x64-windows-static/lib"
+    "${PLATFORM_THIRDPARTY_DIR}/libvorbis_x64-windows-static/lib"
+    "${PLATFORM_THIRDPARTY_DIR}/libogg_x64-windows-static/lib"
+    "${PLATFORM_THIRDPARTY_DIR}/libflac_x64-windows-static/lib"
+    "${PLATFORM_THIRDPARTY_DIR}/mp3lame_x64-windows-static/lib"
+    "${PLATFORM_THIRDPARTY_DIR}/mpg123_x64-windows-static/lib"
+    "${PLATFORM_THIRDPARTY_DIR}/opus_x64-windows-static/lib"
+    "${PLATFORM_THIRDPARTY_DIR}/qtbase_x64-windows-static/lib"
+    "${PLATFORM_THIRDPARTY_DIR}/qtbase_x64-windows/lib"
+    "${PLATFORM_THIRDPARTY_DIR}/glad_x64-windows-static/lib"
+    "${PLATFORM_THIRDPARTY_DIR}/opengl_x64-windows-static/lib"
+    "${PLATFORM_THIRDPARTY_DIR}/lua_x64-windows-static/lib"
+    "${PLATFORM_THIRDPARTY_DIR}/python3_x64-windows-static/lib"
+    "${PLATFORM_THIRDPARTY_DIR}/python3_x64-windows/lib"
+    "${PLATFORM_THIRDPARTY_DIR}/box2d_x64-windows-static/lib"
+    "${PLATFORM_THIRDPARTY_DIR}/box2D/lib"
+    "${PLATFORM_THIRDPARTY_DIR}/bullet3_x64-windows-static/lib"
+    "${PLATFORM_THIRDPARTY_DIR}/polyclipping_x64-windows-static/lib"
+    "${PLATFORM_THIRDPARTY_DIR}/harfbuzz_x64-windows-static/lib"
+    "${PLATFORM_THIRDPARTY_DIR}/icu_x64-windows-static/lib"
+    "${PLATFORM_THIRDPARTY_DIR}/pcre2_x64-windows-static/lib"
+    "${PLATFORM_THIRDPARTY_DIR}/zstd_x64-windows-static/lib"
+    "${PLATFORM_THIRDPARTY_DIR}/freetype_x64-windows-static/lib"
+    "${PLATFORM_THIRDPARTY_DIR}/libpng_x64-windows-static/lib"
+    "${PLATFORM_THIRDPARTY_DIR}/zlib_x64-windows-static/lib"
+    "${PLATFORM_THIRDPARTY_DIR}/brotli_x64-windows-static/lib"
+    "${PLATFORM_THIRDPARTY_DIR}/double-conversion_x64-windows-static/lib"
+    "${PLATFORM_THIRDPARTY_DIR}/jhasse-poly2tri_x64-windows-static/lib"
 )
 
 # Function to find static library first, then fall back to dynamic
@@ -668,134 +609,104 @@ message(STATUS "")
 
 # Define library search paths (prefer static versions)
 set(LIB_SEARCH_PATHS
-    "${THIRDPARTY_DIR}/sdl2_x64-windows-static/lib"
-    "${THIRDPARTY_DIR}/sdl2_x64-windows/lib"
-    "${THIRDPARTY_DIR}/sdl2-image_x64-windows-static/lib"
-    "${THIRDPARTY_DIR}/sdl2-image_x64-windows/lib"
-    "${THIRDPARTY_DIR}/sdl2-ttf_x64-windows-static/lib"
-    "${THIRDPARTY_DIR}/sdl2-ttf_x64-windows/lib"
-    "${THIRDPARTY_DIR}/sdl2-mixer_x64-windows-static/lib"
-    "${THIRDPARTY_DIR}/sdl2-mixer_x64-windows/lib"
-    "${THIRDPARTY_DIR}/libstk_x64-windows-static/lib"
-    "${THIRDPARTY_DIR}/libstk_x64-windows/lib"
-    "${THIRDPARTY_DIR}/libvorbis_x64-windows-static/lib"
-    "${THIRDPARTY_DIR}/libvorbis_x64-windows/lib"
-    "${THIRDPARTY_DIR}/libogg_x64-windows-static/lib"
-    "${THIRDPARTY_DIR}/libogg_x64-windows/lib"
-    "${THIRDPARTY_DIR}/libflac_x64-windows-static/lib"
-    "${THIRDPARTY_DIR}/libflac_x64-windows/lib"
-    "${THIRDPARTY_DIR}/mp3lame_x64-windows-static/lib"
-    "${THIRDPARTY_DIR}/mp3lame_x64-windows/lib"
-    "${THIRDPARTY_DIR}/mpg123_x64-windows-static/lib"
-    "${THIRDPARTY_DIR}/mpg123_x64-windows/lib"
-    "${THIRDPARTY_DIR}/opus_x64-windows-static/lib"
-    "${THIRDPARTY_DIR}/opus_x64-windows/lib"
-    "${THIRDPARTY_DIR}/assimp_x64-windows-static/lib"
-    "${THIRDPARTY_DIR}/assimp_x64-windows/lib"
-    "${THIRDPARTY_DIR}/lua_x64-windows-static/lib"
-    "${THIRDPARTY_DIR}/lua_x64-windows/lib"
-    "${THIRDPARTY_DIR}/python3_x64-windows-static/lib"
-    "${THIRDPARTY_DIR}/python3_x64-windows/lib"
-    "${THIRDPARTY_DIR}/glad_x64-windows-static/lib"
-    "${THIRDPARTY_DIR}/glad_x64-windows/lib"
-    "${THIRDPARTY_DIR}/box2D_x64-windows-static/lib"
-    "${THIRDPARTY_DIR}/box2D/lib"
-    "${THIRDPARTY_DIR}/bullet3_x64-windows-static/lib"
-    "${THIRDPARTY_DIR}/bullet3_x64-windows/lib"
-    "${THIRDPARTY_DIR}/polyclipping_x64-windows-static/lib"
-    "${THIRDPARTY_DIR}/polyclipping_x64-windows/lib"
-    "${THIRDPARTY_DIR}/minizip_x64-windows-static/lib"
-    "${THIRDPARTY_DIR}/minizip_x64-windows/lib"
-    "${THIRDPARTY_DIR}/pugixml_x64-windows-static/lib"
-    "${THIRDPARTY_DIR}/pugixml_x64-windows/lib"
-    "${THIRDPARTY_DIR}/yaml-cpp_x64-windows/lib"
-    "${THIRDPARTY_DIR}/spdlog_x64-windows/lib"
-    "${THIRDPARTY_DIR}/libsndfile_x64-windows-static/lib"
-    "${THIRDPARTY_DIR}/libsndfile_x64-windows/lib"
-    "${THIRDPARTY_DIR}/qtbase_x64-windows-static/lib"
-    "${THIRDPARTY_DIR}/qtbase_x64-windows/lib"
-    "${THIRDPARTY_DIR}/harfbuzz_x64-windows-static/lib"
-    "${THIRDPARTY_DIR}/harfbuzz_x64-windows/lib"
-    "${THIRDPARTY_DIR}/icu_x64-windows-static/lib"
-    "${THIRDPARTY_DIR}/icu_x64-windows/lib"
-    "${THIRDPARTY_DIR}/pcre2_x64-windows-static/lib"
-    "${THIRDPARTY_DIR}/pcre2_x64-windows/lib"
-    "${THIRDPARTY_DIR}/zstd_x64-windows-static/lib"
-    "${THIRDPARTY_DIR}/zstd_x64-windows/lib"
-    "${THIRDPARTY_DIR}/freetype_x64-windows-static/lib"
-    "${THIRDPARTY_DIR}/freetype_x64-windows/lib"
-    "${THIRDPARTY_DIR}/libpng_x64-windows-static/lib"
-    "${THIRDPARTY_DIR}/libpng_x64-windows/lib"
-    "${THIRDPARTY_DIR}/zlib_x64-windows-static/lib"
-    "${THIRDPARTY_DIR}/zlib_x64-windows/lib"
-    "${THIRDPARTY_DIR}/brotli_x64-windows-static/lib"
-    "${THIRDPARTY_DIR}/brotli_x64-windows/lib"
-    "${THIRDPARTY_DIR}/double-conversion_x64-windows-static/lib"
-    "${THIRDPARTY_DIR}/double-conversion_x64-windows/lib"
-    "${THIRDPARTY_DIR}/jhasse-poly2tri_x64-windows-static/lib"
-    "${THIRDPARTY_DIR}/jhasse-poly2tri_x64-windows/lib"
+    "${PLATFORM_THIRDPARTY_DIR}/sdl2_x64-windows-static/lib"
+    "${PLATFORM_THIRDPARTY_DIR}/sdl2-image_x64-windows-static/lib"
+    "${PLATFORM_THIRDPARTY_DIR}/sdl2-ttf_x64-windows-static/lib"
+    "${PLATFORM_THIRDPARTY_DIR}/sdl2-mixer_x64-windows-static/lib"
+    "${PLATFORM_THIRDPARTY_DIR}/libstk_x64-windows-static/lib"
+    "${PLATFORM_THIRDPARTY_DIR}/libvorbis_x64-windows-static/lib"
+    "${PLATFORM_THIRDPARTY_DIR}/libogg_x64-windows-static/lib"
+    "${PLATFORM_THIRDPARTY_DIR}/libflac_x64-windows-static/lib"
+    "${PLATFORM_THIRDPARTY_DIR}/mp3lame_x64-windows-static/lib"
+    "${PLATFORM_THIRDPARTY_DIR}/mpg123_x64-windows-static/lib"
+    "${PLATFORM_THIRDPARTY_DIR}/opus_x64-windows-static/lib"
+    "${PLATFORM_THIRDPARTY_DIR}/assimp_x64-windows-static/lib"
+    "${PLATFORM_THIRDPARTY_DIR}/lua_x64-windows-static/lib"
+    "${PLATFORM_THIRDPARTY_DIR}/python3_x64-windows-static/lib"
+    "${PLATFORM_THIRDPARTY_DIR}/python3_x64-windows/lib"
+    "${PLATFORM_THIRDPARTY_DIR}/glad_x64-windows-static/lib"
+    "${PLATFORM_THIRDPARTY_DIR}/box2d_x64-windows-static/lib"
+    "${PLATFORM_THIRDPARTY_DIR}/box2D/lib"
+    "${PLATFORM_THIRDPARTY_DIR}/bullet3_x64-windows-static/lib"
+    "${PLATFORM_THIRDPARTY_DIR}/polyclipping_x64-windows-static/lib"
+    "${PLATFORM_THIRDPARTY_DIR}/minizip_x64-windows-static/lib"
+    "${PLATFORM_THIRDPARTY_DIR}/pugixml_x64-windows-static/lib"
+    "${PLATFORM_THIRDPARTY_DIR}/yaml-cpp_x64-windows/lib"
+    "${PLATFORM_THIRDPARTY_DIR}/spdlog_x64-windows/lib"
+    "${PLATFORM_THIRDPARTY_DIR}/libsndfile_x64-windows-static/lib"
+    "${PLATFORM_THIRDPARTY_DIR}/qtbase_x64-windows-static/lib"
+    "${PLATFORM_THIRDPARTY_DIR}/qtbase_x64-windows/lib"
+    "${PLATFORM_THIRDPARTY_DIR}/harfbuzz_x64-windows-static/lib"
+    "${PLATFORM_THIRDPARTY_DIR}/icu_x64-windows-static/lib"
+    "${PLATFORM_THIRDPARTY_DIR}/pcre2_x64-windows-static/lib"
+    "${PLATFORM_THIRDPARTY_DIR}/zstd_x64-windows-static/lib"
+    "${PLATFORM_THIRDPARTY_DIR}/freetype_x64-windows-static/lib"
+    "${PLATFORM_THIRDPARTY_DIR}/libpng_x64-windows-static/lib"
+    "${PLATFORM_THIRDPARTY_DIR}/zlib_x64-windows-static/lib"
+    "${PLATFORM_THIRDPARTY_DIR}/brotli_x64-windows-static/lib"
+    "${PLATFORM_THIRDPARTY_DIR}/double-conversion_x64-windows-static/lib"
+    "${PLATFORM_THIRDPARTY_DIR}/jhasse-poly2tri_x64-windows-static/lib"
 )
 
 # Find libraries (static first, then dynamic fallback)
-find_static_or_dynamic_library(LUA_LIB "lua" "${THIRDPARTY_DIR}/lua_x64-windows-static/lib;${THIRDPARTY_DIR}/lua_x64-windows/lib")
-find_static_or_dynamic_library(PYTHON312_LIB "python312" "${THIRDPARTY_DIR}/python3_x64-windows-static/lib;${THIRDPARTY_DIR}/python3_x64-windows/lib")
+find_static_or_dynamic_library(LUA_LIB "lua" "${PLATFORM_THIRDPARTY_DIR}/lua_x64-windows-static/lib")
+find_static_or_dynamic_library(PYTHON312_LIB "python312" "${PLATFORM_THIRDPARTY_DIR}/python3_x64-windows-static/lib;${PLATFORM_THIRDPARTY_DIR}/python3_x64-windows/lib")
 # SDL2 static libraries have different names
-find_static_or_dynamic_library(SDL2_LIB "SDL2-static" "${THIRDPARTY_DIR}/sdl2_x64-windows-static/lib;${THIRDPARTY_DIR}/sdl2_x64-windows/lib")
-find_static_or_dynamic_library(SDL2_MAIN_LIB "SDL2main" "${THIRDPARTY_DIR}/sdl2_x64-windows-static/lib/manual-link;${THIRDPARTY_DIR}/sdl2_x64-windows/lib")
-find_static_or_dynamic_library(SDL2_IMAGE_LIB "SDL2_image" "${THIRDPARTY_DIR}/sdl2-image_x64-windows-static/lib;${THIRDPARTY_DIR}/sdl2-image_x64-windows/lib")
-find_static_or_dynamic_library(SDL2_TTF_LIB "SDL2_ttf" "${THIRDPARTY_DIR}/sdl2-ttf_x64-windows-static/lib;${THIRDPARTY_DIR}/sdl2-ttf_x64-windows/lib")
-find_static_or_dynamic_library(SDL2_MIXER_LIB "SDL2_mixer" "${THIRDPARTY_DIR}/sdl2-mixer_x64-windows-static/lib;${THIRDPARTY_DIR}/sdl2-mixer_x64-windows/lib")
-find_static_or_dynamic_library(STK_LIB "libstk" "${THIRDPARTY_DIR}/libstk_x64-windows-static/lib;${THIRDPARTY_DIR}/libstk_x64-windows/lib")
-find_static_or_dynamic_library(VORBIS_LIB "vorbis" "${THIRDPARTY_DIR}/libvorbis_x64-windows-static/lib;${THIRDPARTY_DIR}/libvorbis_x64-windows/lib")
-find_static_or_dynamic_library(VORBISFILE_LIB "vorbisfile" "${THIRDPARTY_DIR}/libvorbis_x64-windows-static/lib;${THIRDPARTY_DIR}/libvorbis_x64-windows/lib")
-find_static_or_dynamic_library(OGG_LIB "ogg" "${THIRDPARTY_DIR}/libogg_x64-windows-static/lib;${THIRDPARTY_DIR}/libogg_x64-windows/lib")
-find_static_or_dynamic_library(FLAC_LIB "FLAC" "${THIRDPARTY_DIR}/libflac_x64-windows-static/lib;${THIRDPARTY_DIR}/libflac_x64-windows/lib")
-find_static_or_dynamic_library(MP3LAME_LIB "libmp3lame-static" "${THIRDPARTY_DIR}/mp3lame_x64-windows-static/lib;${THIRDPARTY_DIR}/mp3lame_x64-windows/lib")
-find_static_or_dynamic_library(MPGHIP_LIB "libmpghip-static" "${THIRDPARTY_DIR}/mp3lame_x64-windows-static/lib;${THIRDPARTY_DIR}/mp3lame_x64-windows/lib")
-find_static_or_dynamic_library(MPG123_LIB "mpg123" "${THIRDPARTY_DIR}/mpg123_x64-windows-static/lib;${THIRDPARTY_DIR}/mpg123_x64-windows/lib")
-find_static_or_dynamic_library(OPUS_LIB "opus" "${THIRDPARTY_DIR}/opus_x64-windows-static/lib;${THIRDPARTY_DIR}/opus_x64-windows/lib")
-find_static_or_dynamic_library(ASSIMP_LIB "assimp-vc143-mt" "${THIRDPARTY_DIR}/assimp_x64-windows-static/lib;${THIRDPARTY_DIR}/assimp_x64-windows/lib")
-find_static_or_dynamic_library(GLAD_LIB "glad" "${THIRDPARTY_DIR}/glad_x64-windows-static/lib;${THIRDPARTY_DIR}/glad_x64-windows/lib")
-find_static_or_dynamic_library(BULLET_DYNAMICS_LIB "BulletDynamics" "${THIRDPARTY_DIR}/bullet3_x64-windows-static/lib;${THIRDPARTY_DIR}/bullet3_x64-windows/lib")
-find_static_or_dynamic_library(BULLET_COLLISION_LIB "BulletCollision" "${THIRDPARTY_DIR}/bullet3_x64-windows-static/lib;${THIRDPARTY_DIR}/bullet3_x64-windows/lib")
-find_static_or_dynamic_library(LINEAR_MATH_LIB "LinearMath" "${THIRDPARTY_DIR}/bullet3_x64-windows-static/lib;${THIRDPARTY_DIR}/bullet3_x64-windows/lib")
-find_static_or_dynamic_library(YAML_CPP_LIB "yaml-cpp" "${THIRDPARTY_DIR}/yaml-cpp_x64-windows/lib")
-find_static_or_dynamic_library(SPDLOG_LIB "spdlog" "${THIRDPARTY_DIR}/spdlog_x64-windows/lib")
-find_static_or_dynamic_library(SNDFILE_LIB "sndfile" "${THIRDPARTY_DIR}/libsndfile_x64-windows-static/lib;${THIRDPARTY_DIR}/libsndfile_x64-windows/lib")
+find_static_or_dynamic_library(SDL2_LIB "SDL2-static" "${PLATFORM_THIRDPARTY_DIR}/sdl2_x64-windows-static/lib")
+find_static_or_dynamic_library(SDL2_MAIN_LIB "SDL2main" "${PLATFORM_THIRDPARTY_DIR}/sdl2_x64-windows-static/lib/manual-link;${PLATFORM_THIRDPARTY_DIR}/sdl2_x64-windows-static/lib")
+find_static_or_dynamic_library(SDL2_IMAGE_LIB "SDL2_image-static" "${PLATFORM_THIRDPARTY_DIR}/sdl2-image_x64-windows-static/lib")
+find_static_or_dynamic_library(SDL2_TTF_LIB "SDL2_ttf" "${PLATFORM_THIRDPARTY_DIR}/sdl2-ttf_x64-windows-static/lib")
+find_static_or_dynamic_library(SDL2_MIXER_LIB "SDL2_mixer-static" "${PLATFORM_THIRDPARTY_DIR}/sdl2-mixer_x64-windows-static/lib")
+find_static_or_dynamic_library(STK_LIB "libstk" "${PLATFORM_THIRDPARTY_DIR}/libstk_x64-windows-static/lib")
+find_static_or_dynamic_library(VORBIS_LIB "vorbis" "${PLATFORM_THIRDPARTY_DIR}/libvorbis_x64-windows-static/lib")
+find_static_or_dynamic_library(VORBISFILE_LIB "vorbisfile" "${PLATFORM_THIRDPARTY_DIR}/libvorbis_x64-windows-static/lib")
+find_static_or_dynamic_library(OGG_LIB "ogg" "${PLATFORM_THIRDPARTY_DIR}/libogg_x64-windows-static/lib")
+find_static_or_dynamic_library(FLAC_LIB "FLAC" "${PLATFORM_THIRDPARTY_DIR}/libflac_x64-windows-static/lib")
+find_static_or_dynamic_library(MP3LAME_LIB "libmp3lame-static" "${PLATFORM_THIRDPARTY_DIR}/mp3lame_x64-windows-static/lib")
+find_static_or_dynamic_library(MPGHIP_LIB "libmpghip-static" "${PLATFORM_THIRDPARTY_DIR}/mp3lame_x64-windows-static/lib")
+find_static_or_dynamic_library(MPG123_LIB "mpg123" "${PLATFORM_THIRDPARTY_DIR}/mpg123_x64-windows-static/lib")
+find_static_or_dynamic_library(OPUS_LIB "opus" "${PLATFORM_THIRDPARTY_DIR}/opus_x64-windows-static/lib")
+find_static_or_dynamic_library(ASSIMP_LIB "assimp-vc143-mt" "${PLATFORM_THIRDPARTY_DIR}/assimp_x64-windows-static/lib")
+find_static_or_dynamic_library(GLAD_LIB "glad" "${PLATFORM_THIRDPARTY_DIR}/glad_x64-windows-static/lib")
+find_static_or_dynamic_library(BULLET_DYNAMICS_LIB "BulletDynamics" "${PLATFORM_THIRDPARTY_DIR}/bullet3_x64-windows-static/lib")
+find_static_or_dynamic_library(BULLET_COLLISION_LIB "BulletCollision" "${PLATFORM_THIRDPARTY_DIR}/bullet3_x64-windows-static/lib")
+find_static_or_dynamic_library(LINEAR_MATH_LIB "LinearMath" "${PLATFORM_THIRDPARTY_DIR}/bullet3_x64-windows-static/lib")
+find_static_or_dynamic_library(YAML_CPP_LIB "yaml-cpp" "${PLATFORM_THIRDPARTY_DIR}/yaml-cpp_x64-windows/lib")
+find_static_or_dynamic_library(SPDLOG_LIB "spdlog" "${PLATFORM_THIRDPARTY_DIR}/spdlog_x64-windows/lib")
+find_static_or_dynamic_library(SNDFILE_LIB "sndfile" "${PLATFORM_THIRDPARTY_DIR}/libsndfile_x64-windows-static/lib")
 
 # Handle Box2D with debug/release variants
-find_static_or_dynamic_library(BOX2D_DEBUG_LIB "box2dd" "${THIRDPARTY_DIR}/box2D_x64-windows-static/lib;${THIRDPARTY_DIR}/box2D/lib")
-find_static_or_dynamic_library(BOX2D_RELEASE_LIB "box2d" "${THIRDPARTY_DIR}/box2D_x64-windows-static/lib;${THIRDPARTY_DIR}/box2D/lib")
+find_static_or_dynamic_library(BOX2D_DEBUG_LIB "box2dd" "${PLATFORM_THIRDPARTY_DIR}/box2d_x64-windows-static/lib;${PLATFORM_THIRDPARTY_DIR}/box2D/lib")
+find_static_or_dynamic_library(BOX2D_RELEASE_LIB "box2d" "${PLATFORM_THIRDPARTY_DIR}/box2d_x64-windows-static/lib;${PLATFORM_THIRDPARTY_DIR}/box2D/lib")
 
 # Find polyclipping library
-find_static_or_dynamic_library(POLYCLIPPING_LIB "polyclipping" "${THIRDPARTY_DIR}/polyclipping_x64-windows-static/lib;${THIRDPARTY_DIR}/polyclipping_x64-windows/lib")
+find_static_or_dynamic_library(POLYCLIPPING_LIB "polyclipping" "${PLATFORM_THIRDPARTY_DIR}/polyclipping_x64-windows-static/lib")
 
 # Find additional libraries
-find_static_or_dynamic_library(MINIZIP_LIB "minizip" "${THIRDPARTY_DIR}/minizip_x64-windows-static/lib;${THIRDPARTY_DIR}/minizip_x64-windows/lib")
-find_static_or_dynamic_library(POLY2TRI_LIB "poly2tri" "${THIRDPARTY_DIR}/jhasse-poly2tri_x64-windows-static/lib;${THIRDPARTY_DIR}/jhasse-poly2tri_x64-windows/lib")
-find_static_or_dynamic_library(PUGIXML_LIB "pugixml" "${THIRDPARTY_DIR}/pugixml_x64-windows-static/lib;${THIRDPARTY_DIR}/pugixml_x64-windows/lib")
+find_static_or_dynamic_library(MINIZIP_LIB "minizip" "${PLATFORM_THIRDPARTY_DIR}/minizip_x64-windows-static/lib")
+find_static_or_dynamic_library(POLY2TRI_LIB "poly2tri" "${PLATFORM_THIRDPARTY_DIR}/jhasse-poly2tri_x64-windows-static/lib")
+find_static_or_dynamic_library(PUGIXML_LIB "pugixml" "${PLATFORM_THIRDPARTY_DIR}/pugixml_x64-windows-static/lib")
 
 # Find missing static libraries that are causing DLL dependencies
-find_static_or_dynamic_library(BZIP2_LIB "bz2" "${THIRDPARTY_DIR}/bzip2_x64-windows-static/lib;${THIRDPARTY_DIR}/bzip2_x64-windows/lib")
-find_static_or_dynamic_library(LIBJPEG_TURBO_LIB "jpeg" "${THIRDPARTY_DIR}/libjpeg-turbo_x64-windows-static/lib;${THIRDPARTY_DIR}/libjpeg-turbo_x64-windows/lib")
-find_static_or_dynamic_library(TURBOJPEG_LIB "turbojpeg" "${THIRDPARTY_DIR}/libjpeg-turbo_x64-windows-static/lib;${THIRDPARTY_DIR}/libjpeg-turbo_x64-windows/lib")
-find_static_or_dynamic_library(LZMA_LIB "lzma" "${THIRDPARTY_DIR}/liblzma_x64-windows/lib")
-find_static_or_dynamic_library(LZ4_LIB "lz4" "${THIRDPARTY_DIR}/lz4_x64-windows-static/lib;${THIRDPARTY_DIR}/lz4_x64-windows/lib")
-find_static_or_dynamic_library(WAVPACK_LIB "libwavpack" "${THIRDPARTY_DIR}/wavpack_x64-windows-static/lib;${THIRDPARTY_DIR}/wavpack_x64-windows/lib")
-find_static_or_dynamic_library(SQLITE3_LIB "sqlite3" "${THIRDPARTY_DIR}/sqlite3_x64-windows-static/lib;${THIRDPARTY_DIR}/sqlite3_x64-windows/lib")
-find_static_or_dynamic_library(OPENSSL_SSL_LIB "libssl" "${THIRDPARTY_DIR}/openssl_x64-windows-static/lib;${THIRDPARTY_DIR}/openssl_x64-windows/lib")
-find_static_or_dynamic_library(OPENSSL_CRYPTO_LIB "libcrypto" "${THIRDPARTY_DIR}/openssl_x64-windows-static/lib;${THIRDPARTY_DIR}/openssl_x64-windows/lib")
+find_static_or_dynamic_library(BZIP2_LIB "bz2" "${PLATFORM_THIRDPARTY_DIR}/bzip2_x64-windows-static/lib")
+find_static_or_dynamic_library(LIBJPEG_TURBO_LIB "jpeg" "${PLATFORM_THIRDPARTY_DIR}/libjpeg-turbo_x64-windows-static/lib")
+find_static_or_dynamic_library(TURBOJPEG_LIB "turbojpeg" "${PLATFORM_THIRDPARTY_DIR}/libjpeg-turbo_x64-windows-static/lib")
+find_static_or_dynamic_library(LZ4_LIB "lz4" "${PLATFORM_THIRDPARTY_DIR}/lz4_x64-windows-static/lib")
+find_static_or_dynamic_library(WAVPACK_LIB "libwavpack" "${PLATFORM_THIRDPARTY_DIR}/wavpack_x64-windows-static/lib")
+find_static_or_dynamic_library(SQLITE3_LIB "sqlite3" "${PLATFORM_THIRDPARTY_DIR}/sqlite3_x64-windows-static/lib")
+find_static_or_dynamic_library(OPENSSL_SSL_LIB "libssl" "${PLATFORM_THIRDPARTY_DIR}/openssl_x64-windows-static/lib")
+find_static_or_dynamic_library(OPENSSL_CRYPTO_LIB "libcrypto" "${PLATFORM_THIRDPARTY_DIR}/openssl_x64-windows-static/lib")
 
 # Find additional static libraries required for SDL2_ttf and other dependencies
-find_static_or_dynamic_library(FREETYPE_LIB "freetype" "${THIRDPARTY_DIR}/freetype_x64-windows-static/lib;${THIRDPARTY_DIR}/freetype_x64-windows/lib")
-find_static_or_dynamic_library(LIBPNG_LIB "libpng16" "${THIRDPARTY_DIR}/libpng_x64-windows-static/lib;${THIRDPARTY_DIR}/libpng_x64-windows/lib")
-find_static_or_dynamic_library(ZLIB_LIB "zlib" "${THIRDPARTY_DIR}/zlib_x64-windows-static/lib;${THIRDPARTY_DIR}/zlib_x64-windows/lib")
-find_static_or_dynamic_library(BROTLI_DEC_LIB "brotlidec" "${THIRDPARTY_DIR}/brotli_x64-windows-static/lib;${THIRDPARTY_DIR}/brotli_x64-windows/lib")
-find_static_or_dynamic_library(BROTLI_COMMON_LIB "brotlicommon" "${THIRDPARTY_DIR}/brotli_x64-windows-static/lib;${THIRDPARTY_DIR}/brotli_x64-windows/lib")
+find_static_or_dynamic_library(FREETYPE_LIB "freetype" "${PLATFORM_THIRDPARTY_DIR}/freetype_x64-windows-static/lib")
+find_static_or_dynamic_library(LIBPNG_LIB "libpng16" "${PLATFORM_THIRDPARTY_DIR}/libpng_x64-windows-static/lib")
+find_static_or_dynamic_library(ZLIB_LIB "zlib" "${PLATFORM_THIRDPARTY_DIR}/zlib_x64-windows-static/lib")
+find_static_or_dynamic_library(BROTLI_DEC_LIB "brotlidec" "${PLATFORM_THIRDPARTY_DIR}/brotli_x64-windows-static/lib")
+find_static_or_dynamic_library(BROTLI_COMMON_LIB "brotlicommon" "${PLATFORM_THIRDPARTY_DIR}/brotli_x64-windows-static/lib")
 
 # Find additional optional static libraries that may be dependencies
-find_static_or_dynamic_library(KUBAZIP_LIB "kubazip" "${THIRDPARTY_DIR}/kubazip_x64-windows-static/lib;${THIRDPARTY_DIR}/kubazip_x64-windows/lib")
-find_static_or_dynamic_library(DRACO_LIB "draco" "${THIRDPARTY_DIR}/draco_x64-windows-static/lib;${THIRDPARTY_DIR}/draco_x64-windows/lib")
+find_static_or_dynamic_library(KUBAZIP_LIB "kubazip" "${PLATFORM_THIRDPARTY_DIR}/kubazip_x64-windows-static/lib")
+find_static_or_dynamic_library(DRACO_LIB "draco" "${PLATFORM_THIRDPARTY_DIR}/draco_x64-windows-static/lib")
 
 # Link libraries to engine
 target_link_libraries(LupineEngine
@@ -1081,40 +992,40 @@ if(Qt6_FOUND)
     add_executable(lupine-editor ${EDITOR_SOURCES} ${EDITOR_HEADERS} ${EDITOR_RESOURCES})
 
     # Find Qt libraries (use static versions)
-    find_static_or_dynamic_library(QT6_CORE_LIB "Qt6Core" "${THIRDPARTY_DIR}/qtbase_x64-windows-static/lib;${THIRDPARTY_DIR}/qtbase_x64-windows/lib")
-    find_static_or_dynamic_library(QT6_WIDGETS_LIB "Qt6Widgets" "${THIRDPARTY_DIR}/qtbase_x64-windows-static/lib;${THIRDPARTY_DIR}/qtbase_x64-windows/lib")
-    find_static_or_dynamic_library(QT6_GUI_LIB "Qt6Gui" "${THIRDPARTY_DIR}/qtbase_x64-windows-static/lib;${THIRDPARTY_DIR}/qtbase_x64-windows/lib")
-    find_static_or_dynamic_library(QT6_OPENGL_LIB "Qt6OpenGL" "${THIRDPARTY_DIR}/qtbase_x64-windows-static/lib;${THIRDPARTY_DIR}/qtbase_x64-windows/lib")
-    find_static_or_dynamic_library(QT6_OPENGL_WIDGETS_LIB "Qt6OpenGLWidgets" "${THIRDPARTY_DIR}/qtbase_x64-windows-static/lib;${THIRDPARTY_DIR}/qtbase_x64-windows/lib")
-    find_static_or_dynamic_library(QT6_ENTRYPOINT_LIB "Qt6EntryPoint" "${THIRDPARTY_DIR}/qtbase_x64-windows-static/lib;${THIRDPARTY_DIR}/qtbase_x64-windows/lib")
+    find_static_or_dynamic_library(QT6_CORE_LIB "Qt6Core" "${PLATFORM_THIRDPARTY_DIR}/qtbase_x64-windows-static/lib;${PLATFORM_THIRDPARTY_DIR}/qtbase_x64-windows/lib")
+    find_static_or_dynamic_library(QT6_WIDGETS_LIB "Qt6Widgets" "${PLATFORM_THIRDPARTY_DIR}/qtbase_x64-windows-static/lib;${PLATFORM_THIRDPARTY_DIR}/qtbase_x64-windows/lib")
+    find_static_or_dynamic_library(QT6_GUI_LIB "Qt6Gui" "${PLATFORM_THIRDPARTY_DIR}/qtbase_x64-windows-static/lib;${PLATFORM_THIRDPARTY_DIR}/qtbase_x64-windows/lib")
+    find_static_or_dynamic_library(QT6_OPENGL_LIB "Qt6OpenGL" "${PLATFORM_THIRDPARTY_DIR}/qtbase_x64-windows-static/lib;${PLATFORM_THIRDPARTY_DIR}/qtbase_x64-windows/lib")
+    find_static_or_dynamic_library(QT6_OPENGL_WIDGETS_LIB "Qt6OpenGLWidgets" "${PLATFORM_THIRDPARTY_DIR}/qtbase_x64-windows-static/lib;${PLATFORM_THIRDPARTY_DIR}/qtbase_x64-windows/lib")
+    find_static_or_dynamic_library(QT6_ENTRYPOINT_LIB "Qt6EntryPoint" "${PLATFORM_THIRDPARTY_DIR}/qtbase_x64-windows-static/lib;${PLATFORM_THIRDPARTY_DIR}/qtbase_x64-windows/lib")
 
     # Find Qt dependency libraries for static linking
-    find_static_or_dynamic_library(HARFBUZZ_LIB "harfbuzz" "${THIRDPARTY_DIR}/harfbuzz_x64-windows-static/lib;${THIRDPARTY_DIR}/harfbuzz_x64-windows/lib")
-    find_static_or_dynamic_library(ICU_UC_LIB "icuuc" "${THIRDPARTY_DIR}/icu_x64-windows-static/lib;${THIRDPARTY_DIR}/icu_x64-windows/lib")
-    find_static_or_dynamic_library(ICU_IN_LIB "icuin" "${THIRDPARTY_DIR}/icu_x64-windows-static/lib;${THIRDPARTY_DIR}/icu_x64-windows/lib")
-    find_static_or_dynamic_library(ICU_DT_LIB "icudt" "${THIRDPARTY_DIR}/icu_x64-windows-static/lib;${THIRDPARTY_DIR}/icu_x64-windows/lib")
-    find_static_or_dynamic_library(PCRE2_16_LIB "pcre2-16" "${THIRDPARTY_DIR}/pcre2_x64-windows-static/lib;${THIRDPARTY_DIR}/pcre2_x64-windows/lib")
-    find_static_or_dynamic_library(ZSTD_LIB "zstd" "${THIRDPARTY_DIR}/zstd_x64-windows-static/lib;${THIRDPARTY_DIR}/zstd_x64-windows/lib")
-    find_static_or_dynamic_library(FREETYPE_LIB "freetype" "${THIRDPARTY_DIR}/freetype_x64-windows-static/lib")
-    find_static_or_dynamic_library(LIBPNG_LIB "libpng16" "${THIRDPARTY_DIR}/libpng_x64-windows-static/lib")
-    find_static_or_dynamic_library(ZLIB_LIB "zlib" "${THIRDPARTY_DIR}/zlib_x64-windows-static/lib")
-    find_static_or_dynamic_library(BROTLI_DEC_LIB "brotlidec" "${THIRDPARTY_DIR}/brotli_x64-windows-static/lib")
-    find_static_or_dynamic_library(BROTLI_COMMON_LIB "brotlicommon" "${THIRDPARTY_DIR}/brotli_x64-windows-static/lib")
-    find_static_or_dynamic_library(DOUBLE_CONVERSION_LIB "double-conversion" "${THIRDPARTY_DIR}/double-conversion_x64-windows-static/lib")
+    find_static_or_dynamic_library(HARFBUZZ_LIB "harfbuzz" "${PLATFORM_THIRDPARTY_DIR}/harfbuzz_x64-windows-static/lib")
+    find_static_or_dynamic_library(ICU_UC_LIB "icuuc" "${PLATFORM_THIRDPARTY_DIR}/icu_x64-windows-static/lib")
+    find_static_or_dynamic_library(ICU_IN_LIB "icuin" "${PLATFORM_THIRDPARTY_DIR}/icu_x64-windows-static/lib")
+    find_static_or_dynamic_library(ICU_DT_LIB "icudt" "${PLATFORM_THIRDPARTY_DIR}/icu_x64-windows-static/lib")
+    find_static_or_dynamic_library(PCRE2_16_LIB "pcre2-16" "${PLATFORM_THIRDPARTY_DIR}/pcre2_x64-windows-static/lib")
+    find_static_or_dynamic_library(ZSTD_LIB "zstd" "${PLATFORM_THIRDPARTY_DIR}/zstd_x64-windows-static/lib")
+    find_static_or_dynamic_library(FREETYPE_LIB "freetype" "${PLATFORM_THIRDPARTY_DIR}/freetype_x64-windows-static/lib")
+    find_static_or_dynamic_library(LIBPNG_LIB "libpng16" "${PLATFORM_THIRDPARTY_DIR}/libpng_x64-windows-static/lib")
+    find_static_or_dynamic_library(ZLIB_LIB "zlib" "${PLATFORM_THIRDPARTY_DIR}/zlib_x64-windows-static/lib")
+    find_static_or_dynamic_library(BROTLI_DEC_LIB "brotlidec" "${PLATFORM_THIRDPARTY_DIR}/brotli_x64-windows-static/lib")
+    find_static_or_dynamic_library(BROTLI_COMMON_LIB "brotlicommon" "${PLATFORM_THIRDPARTY_DIR}/brotli_x64-windows-static/lib")
+    find_static_or_dynamic_library(DOUBLE_CONVERSION_LIB "double-conversion" "${PLATFORM_THIRDPARTY_DIR}/double-conversion_x64-windows-static/lib")
 
     # Find Qt platform plugin libraries for static linking
-    set(QT_PLATFORM_PLUGIN_LIB "${THIRDPARTY_DIR}/qtbase_x64-windows-static/Qt6/plugins/platforms/qwindows.lib")
-    set(QT_GENERIC_PLUGIN_LIB "${THIRDPARTY_DIR}/qtbase_x64-windows-static/Qt6/plugins/generic/qtuiotouchplugin.lib")
+    set(QT_PLATFORM_PLUGIN_LIB "${PLATFORM_THIRDPARTY_DIR}/qtbase_x64-windows-static/Qt6/plugins/platforms/qwindows.lib")
+    set(QT_GENERIC_PLUGIN_LIB "${PLATFORM_THIRDPARTY_DIR}/qtbase_x64-windows-static/Qt6/plugins/generic/qtuiotouchplugin.lib")
 
     # Find Qt resource object files for static linking
-    set(QT_GUI_SHADERS_OBJ "${THIRDPARTY_DIR}/qtbase_x64-windows-static/lib/objects-Release/Gui_resources_2/.qt/rcc/qrc_gui_shaders_init.cpp.obj")
-    set(QT_PDF_INIT_OBJ "${THIRDPARTY_DIR}/qtbase_x64-windows-static/lib/objects-Release/Gui_resources_1/.qt/rcc/qrc_qpdf_init.cpp.obj")
+    set(QT_GUI_SHADERS_OBJ "${PLATFORM_THIRDPARTY_DIR}/qtbase_x64-windows-static/lib/objects-Release/Gui_resources_2/.qt/rcc/qrc_gui_shaders_init.cpp.obj")
+    set(QT_PDF_INIT_OBJ "${PLATFORM_THIRDPARTY_DIR}/qtbase_x64-windows-static/lib/objects-Release/Gui_resources_1/.qt/rcc/qrc_qpdf_init.cpp.obj")
 
     # Verify platform plugin exists
     if(NOT EXISTS ${QT_PLATFORM_PLUGIN_LIB})
         message(WARNING "Qt platform plugin not found at: ${QT_PLATFORM_PLUGIN_LIB}")
         # Try debug version
-        set(QT_PLATFORM_PLUGIN_LIB "${THIRDPARTY_DIR}/qtbase_x64-windows-static/debug/Qt6/plugins/platforms/qwindowsd.lib")
+        set(QT_PLATFORM_PLUGIN_LIB "${PLATFORM_THIRDPARTY_DIR}/qtbase_x64-windows-static/debug/Qt6/plugins/platforms/qwindowsd.lib")
         if(EXISTS ${QT_PLATFORM_PLUGIN_LIB})
             message(STATUS "Using debug Qt platform plugin: ${QT_PLATFORM_PLUGIN_LIB}")
         endif()
@@ -1244,13 +1155,13 @@ if(WIN32 AND FALSE)  # Disabled for full static linking
     # Add custom command to copy DLLs after build
     add_custom_command(TARGET lupine-cli POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        "${THIRDPARTY_DIR}/sdl2_x64-windows/bin/SDL2.dll"
+        "${PLATFORM_THIRDPARTY_DIR}/sdl2_x64-windows/bin/SDL2.dll"
         "${CMAKE_BINARY_DIR}/bin/"
     )
 
     add_custom_command(TARGET lupine-runtime POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        "${THIRDPARTY_DIR}/sdl2_x64-windows/bin/SDL2.dll"
+        "${PLATFORM_THIRDPARTY_DIR}/sdl2_x64-windows/bin/SDL2.dll"
         "${CMAKE_BINARY_DIR}/bin/"
     )
 
@@ -1258,34 +1169,34 @@ if(WIN32 AND FALSE)  # Disabled for full static linking
     if(TARGET lupine-editor)
         add_custom_command(TARGET lupine-editor POST_BUILD
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            "${THIRDPARTY_DIR}/sdl2_x64-windows/bin/SDL2.dll"
+            "${PLATFORM_THIRDPARTY_DIR}/sdl2_x64-windows/bin/SDL2.dll"
             "${CMAKE_BINARY_DIR}/bin/"
         )
 
         # Copy Qt DLLs for editor
         add_custom_command(TARGET lupine-editor POST_BUILD
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            "${THIRDPARTY_DIR}/qtbase_x64-windows/bin/Qt6Core.dll"
+            "${PLATFORM_THIRDPARTY_DIR}/qtbase_x64-windows/bin/Qt6Core.dll"
             "${CMAKE_BINARY_DIR}/bin/"
         )
         add_custom_command(TARGET lupine-editor POST_BUILD
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            "${THIRDPARTY_DIR}/qtbase_x64-windows/bin/Qt6Widgets.dll"
+            "${PLATFORM_THIRDPARTY_DIR}/qtbase_x64-windows/bin/Qt6Widgets.dll"
             "${CMAKE_BINARY_DIR}/bin/"
         )
         add_custom_command(TARGET lupine-editor POST_BUILD
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            "${THIRDPARTY_DIR}/qtbase_x64-windows/bin/Qt6Gui.dll"
+            "${PLATFORM_THIRDPARTY_DIR}/qtbase_x64-windows/bin/Qt6Gui.dll"
             "${CMAKE_BINARY_DIR}/bin/"
         )
         add_custom_command(TARGET lupine-editor POST_BUILD
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            "${THIRDPARTY_DIR}/qtbase_x64-windows/bin/Qt6OpenGL.dll"
+            "${PLATFORM_THIRDPARTY_DIR}/qtbase_x64-windows/bin/Qt6OpenGL.dll"
             "${CMAKE_BINARY_DIR}/bin/"
         )
         add_custom_command(TARGET lupine-editor POST_BUILD
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            "${THIRDPARTY_DIR}/qtbase_x64-windows/bin/Qt6OpenGLWidgets.dll"
+            "${PLATFORM_THIRDPARTY_DIR}/qtbase_x64-windows/bin/Qt6OpenGLWidgets.dll"
             "${CMAKE_BINARY_DIR}/bin/"
         )
     endif()
