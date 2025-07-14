@@ -13,7 +13,7 @@
 #include "lupine/components/Camera2D.h"
 #include "lupine/nodes/Node2D.h"
 #include "lupine/export/AssetBundler.h"
-#include <SDL2/SDL.h>
+#include <SDL.h>
 #include <glad/glad.h>
 #include <iostream>
 #include <chrono>
@@ -86,15 +86,15 @@ bool Engine::Initialize(int window_width, int window_height, const std::string& 
     ViewportManager::SetCurrentBounds(ViewportManager::GetScreenBounds(static_cast<float>(window_width), static_cast<float>(window_height)));
     std::cout << "ViewportManager bounds set to: " << window_width << "x" << window_height << std::endl;
 
-    // Initialize resource manager
-    if (!ResourceManager::Initialize()) {
-        std::cerr << "Failed to initialize resource manager!" << std::endl;
+    // Initialize renderer first (this creates and sets the graphics device)
+    if (!Renderer::Initialize()) {
+        std::cerr << "Failed to initialize renderer!" << std::endl;
         return false;
     }
 
-    // Initialize renderer
-    if (!Renderer::Initialize()) {
-        std::cerr << "Failed to initialize renderer!" << std::endl;
+    // Initialize resource manager (now that graphics device is available)
+    if (!ResourceManager::Initialize()) {
+        std::cerr << "Failed to initialize resource manager!" << std::endl;
         return false;
     }
 
@@ -228,7 +228,13 @@ bool Engine::InitializeWithProject(const Project* project) {
     ViewportManager::SetCurrentBounds(ViewportManager::GetScreenBounds(static_cast<float>(render_width), static_cast<float>(render_height)));
     std::cout << "ViewportManager bounds set to render resolution: " << render_width << "x" << render_height << std::endl;
 
-    // Initialize resource manager
+    // Initialize renderer first (this creates and sets the graphics device)
+    if (!Renderer::Initialize()) {
+        std::cerr << "Failed to initialize renderer!" << std::endl;
+        return false;
+    }
+
+    // Initialize resource manager (now that graphics device is available)
     if (!ResourceManager::Initialize()) {
         std::cerr << "Failed to initialize resource manager!" << std::endl;
         return false;
@@ -242,12 +248,6 @@ bool Engine::InitializeWithProject(const Project* project) {
         ResourceManager::SetTextureFilter(TextureFilter::Bicubic);
     } else {
         ResourceManager::SetTextureFilter(TextureFilter::Bilinear);
-    }
-
-    // Initialize renderer
-    if (!Renderer::Initialize()) {
-        std::cerr << "Failed to initialize renderer!" << std::endl;
-        return false;
     }
 
     // Initialize input manager
@@ -407,6 +407,25 @@ void Engine::Run() {
     std::cout << "Main loop ended." << std::endl;
 }
 
+void Engine::RunFrame() {
+    if (!m_initialized || !m_running) {
+        return;
+    }
+
+    try {
+        UpdateTiming();
+        HandleEvents();
+        Update();
+        Render();
+    } catch (const std::exception& e) {
+        std::cerr << "Frame exception: " << e.what() << std::endl;
+        m_running = false;
+    } catch (...) {
+        std::cerr << "Unknown frame exception" << std::endl;
+        m_running = false;
+    }
+}
+
 bool Engine::LoadProject(const std::string& project_path) {
     std::cout << "Loading project: " << project_path << std::endl;
 
@@ -438,27 +457,76 @@ bool Engine::LoadProject(const std::string& project_path) {
 bool Engine::LoadScene(const std::string& scene_path) {
     std::cout << "Loading scene: " << scene_path << std::endl;
 
-    auto scene = std::make_unique<Scene>();
-    if (!scene->LoadFromFile(scene_path)) {
-        std::cerr << "Failed to load scene: " << scene_path << std::endl;
-        return false;
+    // Try multiple path resolution strategies
+    std::vector<std::string> file_paths = {
+        scene_path,                                    // Direct path as provided
+    };
+
+    // If the scene path is relative, try resolving it relative to common locations
+    if (!std::filesystem::path(scene_path).is_absolute()) {
+        // Try relative to current working directory
+        file_paths.push_back(std::filesystem::current_path().string() + "/" + scene_path);
+
+        // Try relative to project directory if we have one
+        if (m_current_project && !m_current_project->GetProjectDirectory().empty()) {
+            file_paths.push_back(m_current_project->GetProjectDirectory() + "/" + scene_path);
+        }
+
+        // Try going up directories to find project root (common for runtime in build/bin/Release)
+        std::filesystem::path current_dir = std::filesystem::current_path();
+        for (int i = 0; i < 3; ++i) {  // Try up to 3 levels up
+            current_dir = current_dir.parent_path();
+            std::string potential_path = current_dir.string() + "/" + scene_path;
+            file_paths.push_back(potential_path);
+
+            // Also check if there's a project file in this directory
+            try {
+                for (const auto& entry : std::filesystem::directory_iterator(current_dir)) {
+                    if (entry.is_regular_file() && entry.path().extension() == ".lupine") {
+                        // Found a project file, this might be the project root
+                        file_paths.push_back(current_dir.string() + "/" + scene_path);
+                        break;
+                    }
+                }
+            } catch (...) {
+                // Ignore filesystem errors
+            }
+        }
     }
 
-    // Exit current scene if any
-    if (m_current_scene) {
-        m_current_scene->OnExit();
-        // Cleanup autoloads from previous scene
-        GlobalsManager::Instance().CleanupAutoloads();
+    // Try each path until one works
+    for (const auto& file_path : file_paths) {
+        if (std::filesystem::exists(file_path)) {
+            std::cout << "Found scene file at: " << file_path << std::endl;
+
+            auto scene = std::make_unique<Scene>();
+            if (scene->LoadFromFile(file_path)) {
+                // Exit current scene if any
+                if (m_current_scene) {
+                    m_current_scene->OnExit();
+                    // Cleanup autoloads from previous scene
+                    GlobalsManager::Instance().CleanupAutoloads();
+                }
+
+                m_current_scene = std::move(scene);
+
+                // Initialize autoloads for the new scene
+                GlobalsManager::Instance().InitializeAutoloads(m_current_scene.get());
+
+                m_current_scene->OnEnter();
+
+                return true;
+            } else {
+                std::cerr << "Found scene file but failed to load: " << file_path << std::endl;
+            }
+        }
     }
 
-    m_current_scene = std::move(scene);
-
-    // Initialize autoloads for the new scene
-    GlobalsManager::Instance().InitializeAutoloads(m_current_scene.get());
-
-    m_current_scene->OnEnter();
-
-    return true;
+    std::cerr << "Failed to find scene file. Tried paths:" << std::endl;
+    for (const auto& path : file_paths) {
+        std::cerr << "  " << path << std::endl;
+    }
+    return false;
 }
 
 bool Engine::InitializeSDL() {

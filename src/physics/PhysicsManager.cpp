@@ -6,7 +6,7 @@
 #include "lupine/resources/MeshLoader.h"
 
 // Box2D v3.0 includes
-#include <box2d.h>
+#include <box2d/box2d.h>
 
 // Bullet3 includes
 #include <bullet/btBulletDynamicsCommon.h>

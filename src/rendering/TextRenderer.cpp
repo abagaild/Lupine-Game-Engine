@@ -1,6 +1,7 @@
 #include "lupine/rendering/TextRenderer.h"
 #include "lupine/rendering/Renderer.h"
 #include "lupine/resources/ResourceManager.h"
+#include <SDL.h>
 #include <SDL_ttf.h>
 #include <iostream>
 #include <sstream>

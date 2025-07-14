@@ -7,6 +7,7 @@
 #include "lupine/rendering/TextRenderer.h"
 #include "lupine/localization/LocalizationManager.h"
 #include "lupine/input/InputManager.h"
+#include <SDL.h>
 #include <SDL_ttf.h>
 #include <SDL_events.h>
 #include <iostream>

@@ -1,0 +1,296 @@
+// Lupine Game Loader - Enhanced Web Runtime
+// Template version with placeholder substitution
+(function() {
+    'use strict';
+    
+    // Configuration from export settings
+    const CONFIG = {
+        gameTitle: '{{GAME_TITLE}}',
+        canvasWidth: {{CANVAS_WIDTH}},
+        canvasHeight: {{CANVAS_HEIGHT}},
+        enableThreads: {{ENABLE_THREADS}},
+        enableSIMD: {{ENABLE_SIMD}},
+        memorySize: {{MEMORY_SIZE_MB}},
+        debugMode: {{DEBUG_MODE}}
+    };
+    
+    // Game state management
+    let gameState = {
+        loaded: false,
+        running: false,
+        error: null,
+        progress: 0,
+        startTime: Date.now()
+    };
+    
+    // DOM elements cache
+    let elements = {};
+    
+    // Performance monitoring
+    let performanceMetrics = {
+        loadStartTime: Date.now(),
+        initTime: 0,
+        firstFrameTime: 0
+    };
+    
+    // Initialize DOM references
+    function initializeDOM() {
+        elements.canvas = document.getElementById('canvas');
+        elements.loadingScreen = document.getElementById('loadingScreen');
+        elements.loadingText = document.getElementById('loadingText');
+        elements.loadingStatus = document.getElementById('loadingStatus');
+        elements.progressFill = document.getElementById('progressFill');
+        elements.errorScreen = document.getElementById('errorScreen');
+        elements.errorMessage = document.getElementById('errorMessage');
+        elements.gameContainer = document.getElementById('gameContainer');
+        
+        // Setup canvas context menu prevention
+        if (elements.canvas) {
+            elements.canvas.addEventListener('contextmenu', function(e) {
+                e.preventDefault();
+                return false;
+            });
+        }
+    }
+    
+    // Update loading progress with smooth animation
+    function updateProgress(progress, status) {
+        gameState.progress = Math.max(0, Math.min(1, progress));
+        
+        if (elements.progressFill) {
+            elements.progressFill.style.width = (gameState.progress * 100) + '%';
+        }
+        
+        if (elements.loadingStatus && status) {
+            elements.loadingStatus.textContent = status;
+        }
+        
+        // Log progress in debug mode
+        if (CONFIG.debugMode) {
+            console.log(`Loading progress: ${(gameState.progress * 100).toFixed(1)}% - ${status || ''}`);
+        }
+    }
+    
+    // Show error screen with detailed information
+    function showError(message, details) {
+        gameState.error = message;
+        
+        if (elements.loadingScreen) {
+            elements.loadingScreen.style.display = 'none';
+        }
+        
+        if (elements.errorScreen) {
+            elements.errorScreen.style.display = 'flex';
+        }
+        
+        if (elements.errorMessage) {
+            elements.errorMessage.textContent = message;
+            if (details && CONFIG.debugMode) {
+                elements.errorMessage.innerHTML += '<br><br><small>' + details + '</small>';
+            }
+        }
+        
+        console.error('Lupine Game Error:', message);
+        if (details) {
+            console.error('Details:', details);
+        }
+    }
+    
+    // Hide loading screen and show game
+    function showGame() {
+        gameState.loaded = true;
+        gameState.running = true;
+        performanceMetrics.firstFrameTime = Date.now() - performanceMetrics.loadStartTime;
+        
+        if (elements.loadingScreen) {
+            elements.loadingScreen.style.display = 'none';
+        }
+        
+        // Focus canvas for input
+        if (elements.canvas) {
+            elements.canvas.focus();
+        }
+        
+        console.log('Lupine Game loaded successfully');
+        console.log('Performance metrics:', performanceMetrics);
+        
+        // Trigger custom load event
+        window.dispatchEvent(new CustomEvent('lupineGameLoaded', {
+            detail: { metrics: performanceMetrics }
+        }));
+    }
+    
+    // Handle canvas resize with aspect ratio preservation
+    function handleResize() {
+        if (!elements.canvas || !elements.gameContainer) return;
+        
+        const container = elements.gameContainer;
+        const containerRect = container.getBoundingClientRect();
+        
+        const gameAspect = CONFIG.canvasWidth / CONFIG.canvasHeight;
+        const containerAspect = containerRect.width / containerRect.height;
+        
+        if (containerAspect > gameAspect) {
+            // Container is wider than game aspect ratio
+            elements.canvas.style.height = containerRect.height + 'px';
+            elements.canvas.style.width = (containerRect.height * gameAspect) + 'px';
+        } else {
+            // Container is taller than game aspect ratio
+            elements.canvas.style.width = containerRect.width + 'px';
+            elements.canvas.style.height = (containerRect.width / gameAspect) + 'px';
+        }
+    }
+    
+    // Handle fullscreen toggle
+    function toggleFullscreen() {
+        if (!elements.gameContainer) return;
+        
+        if (!document.fullscreenElement) {
+            elements.gameContainer.requestFullscreen().then(() => {
+                elements.gameContainer.classList.add('fullscreen');
+                handleResize();
+            }).catch(err => {
+                console.warn('Failed to enter fullscreen:', err);
+            });
+        } else {
+            document.exitFullscreen().then(() => {
+                elements.gameContainer.classList.remove('fullscreen');
+                handleResize();
+            });
+        }
+    }
+    
+    // Configure Emscripten Module
+    window.Module = {
+        canvas: function() { 
+            return elements.canvas; 
+        },
+        
+        preRun: [],
+        postRun: [],
+        
+        onRuntimeInitialized: function() {
+            performanceMetrics.initTime = Date.now() - performanceMetrics.loadStartTime;
+            updateProgress(1.0, 'Starting game...');
+            
+            setTimeout(function() {
+                try {
+                    // Call the main function
+                    if (typeof Module.ccall === 'function') {
+                        const result = Module.ccall('lupine_main', 'number', [], []);
+                        if (result !== 0) {
+                            throw new Error('Game initialization failed with code: ' + result);
+                        }
+                    }
+                    showGame();
+                } catch (e) {
+                    showError('Failed to start game', e.message);
+                }
+            }, 100);
+        },
+        
+        onAbort: function(what) {
+            showError('Game crashed', what);
+        },
+        
+        print: function(text) {
+            console.log('[Game]', text);
+        },
+        
+        printErr: function(text) {
+            console.error('[Game Error]', text);
+        },
+        
+        setStatus: function(text) {
+            if (text) {
+                updateProgress(gameState.progress, text);
+            }
+        },
+        
+        totalDependencies: 0,
+        monitorRunDependencies: function(left) {
+            this.totalDependencies = Math.max(this.totalDependencies, left);
+            const progress = this.totalDependencies > 0 ? 
+                (this.totalDependencies - left) / this.totalDependencies : 0;
+            updateProgress(progress * 0.9, left > 0 ? 'Loading dependencies...' : 'Initializing...');
+        },
+        
+        // Memory settings
+        INITIAL_MEMORY: CONFIG.memorySize * 1024 * 1024,
+        ALLOW_MEMORY_GROWTH: true,
+        
+        // Threading settings
+        {{#ENABLE_THREADS}}
+        PTHREAD_POOL_SIZE: 4,
+        {{/ENABLE_THREADS}}
+        
+        // Audio settings
+        webaudioWorkletPolyfill: true
+    };
+    
+    // Initialize when DOM is ready
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initializeDOM);
+    } else {
+        initializeDOM();
+    }
+    
+    // Handle window events
+    window.addEventListener('resize', handleResize);
+    window.addEventListener('orientationchange', function() {
+        setTimeout(handleResize, 100);
+    });
+    
+    // Handle fullscreen changes
+    document.addEventListener('fullscreenchange', function() {
+        if (!document.fullscreenElement) {
+            elements.gameContainer.classList.remove('fullscreen');
+        }
+        handleResize();
+    });
+    
+    // Keyboard shortcuts
+    document.addEventListener('keydown', function(e) {
+        // F11 for fullscreen
+        if (e.key === 'F11') {
+            e.preventDefault();
+            toggleFullscreen();
+        }
+        
+        // Escape to exit fullscreen
+        if (e.key === 'Escape' && document.fullscreenElement) {
+            document.exitFullscreen();
+        }
+    });
+    
+    // Initial resize
+    setTimeout(handleResize, 100);
+    
+    // Expose game API for debugging and external control
+    window.LupineGame = {
+        getState: function() { return gameState; },
+        getConfig: function() { return CONFIG; },
+        getMetrics: function() { return performanceMetrics; },
+        restart: function() { location.reload(); },
+        toggleFullscreen: toggleFullscreen,
+        
+        // Script execution functions
+        executeLuaScript: function(script) {
+            if (typeof Module.ccall === 'function') {
+                return Module.ccall('lupine_execute_lua_script', 'number', ['string'], [script]);
+            }
+            return false;
+        },
+        
+        executePythonScript: function(script) {
+            if (typeof Module.ccall === 'function') {
+                return Module.ccall('lupine_execute_python_script', 'number', ['string'], [script]);
+            }
+            return false;
+        }
+    };
+    
+    // Custom initialization code
+    {{CUSTOM_INIT}}
+    
+})();

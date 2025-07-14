@@ -59,6 +59,11 @@ public:
     void Run();
 
     /**
+     * @brief Run a single frame (for editor integration)
+     */
+    void RunFrame();
+
+    /**
      * @brief Load and run a project
      * @param project_path Path to .lupine project file
      * @return True if project loaded successfully

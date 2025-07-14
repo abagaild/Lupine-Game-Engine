@@ -1,2 +1,10 @@
 /build
+<<<<<<< Updated upstream
 /thirdparty
+=======
+/test_project
+/thirdparty/Linux
+/thirdparty/Mac-OSX
+/thirdparty/Mac-ARM64
+/thirdparty/Windows
+>>>>>>> Stashed changes

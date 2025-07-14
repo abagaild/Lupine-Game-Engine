@@ -13,8 +13,8 @@
 #include <stb_image.h>
 
 // SDL2_ttf for font loading
-#include <SDL.h>
-#include <SDL_ttf.h>
+#include <SDL2/SDL.h>
+#include <SDL2/SDL_ttf.h>
 
 // Platform-specific includes for font enumeration
 #ifdef _WIN32

@@ -8,7 +8,7 @@
 #include <string>
 
 // Forward declarations for physics libraries
-#include <box2d.h>
+#include <box2d/box2d.h>
 class btDiscreteDynamicsWorld;
 class btRigidBody;
 class btCollisionConfiguration;
