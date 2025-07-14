@@ -271,8 +271,8 @@ include_directories(
     "${PLATFORM_THIRDPARTY_DIR}/python3_x64-windows/include"
     "${PLATFORM_THIRDPARTY_DIR}/python3_x64-windows-static/include/python3.12"
     "${PLATFORM_THIRDPARTY_DIR}/python3_x64-windows/include/python3.12"
-    "    "${PLATFORM_THIRDPARTY_DIR}/glad_x64-windows-static/include"
-    "${PLATFORM_THIRDPARTY_DIR}/egl-registry_x64-windows-static/include""
+    "${PLATFORM_THIRDPARTY_DIR}/glad_x64-windows-static/include"
+    "${PLATFORM_THIRDPARTY_DIR}/egl-registry_x64-windows-static/include"
     "${PLATFORM_THIRDPARTY_DIR}/stb_x64-windows-static/include"
     "${PLATFORM_THIRDPARTY_DIR}/boost-headers_x64-windows/include"
     "${PLATFORM_THIRDPARTY_DIR}/boost-config_x64-windows/include"
@@ -303,17 +303,19 @@ include_directories(
     "${PLATFORM_THIRDPARTY_DIR}/mpg123_x64-windows-static/include"
     "${PLATFORM_THIRDPARTY_DIR}/opus_x64-windows-static/include"
     "${PLATFORM_THIRDPARTY_DIR}/qtbase_x64-windows-static/include"
-    "${PLATFORM_THIRDPARTY_DIR}/qtbase_x64-windows-static/include/QtCore"
-    "${PLATFORM_THIRDPARTY_DIR}/qtbase_x64-windows-static/include/QtWidgets"
-    "${PLATFORM_THIRDPARTY_DIR}/qtbase_x64-windows-static/include/QtGui"
-    "${PLATFORM_THIRDPARTY_DIR}/qtbase_x64-windows-static/include/QtOpenGL"
-    "${PLATFORM_THIRDPARTY_DIR}/qtbase_x64-windows-static/include/QtOpenGLWidgets"
+    "${PLATFORM_THIRDPARTY_DIR}/qtbase_x64-windows-static/include/Qt6"
+    "${PLATFORM_THIRDPARTY_DIR}/qtbase_x64-windows-static/include/Qt6/QtCore"
+    "${PLATFORM_THIRDPARTY_DIR}/qtbase_x64-windows-static/include/Qt6/QtWidgets"
+    "${PLATFORM_THIRDPARTY_DIR}/qtbase_x64-windows-static/include/Qt6/QtGui"
+    "${PLATFORM_THIRDPARTY_DIR}/qtbase_x64-windows-static/include/Qt6/QtOpenGL"
+    "${PLATFORM_THIRDPARTY_DIR}/qtbase_x64-windows-static/include/Qt6/QtOpenGLWidgets"
     "${PLATFORM_THIRDPARTY_DIR}/qtbase_x64-windows/include"
-    "${PLATFORM_THIRDPARTY_DIR}/qtbase_x64-windows/include/QtCore"
-    "${PLATFORM_THIRDPARTY_DIR}/qtbase_x64-windows/include/QtWidgets"
-    "${PLATFORM_THIRDPARTY_DIR}/qtbase_x64-windows/include/QtGui"
-    "${PLATFORM_THIRDPARTY_DIR}/qtbase_x64-windows/include/QtOpenGL"
-    "${PLATFORM_THIRDPARTY_DIR}/qtbase_x64-windows/include/QtOpenGLWidgets"
+    "${PLATFORM_THIRDPARTY_DIR}/qtbase_x64-windows/include/Qt6"
+    "${PLATFORM_THIRDPARTY_DIR}/qtbase_x64-windows/include/Qt6/QtCore"
+    "${PLATFORM_THIRDPARTY_DIR}/qtbase_x64-windows/include/Qt6/QtWidgets"
+    "${PLATFORM_THIRDPARTY_DIR}/qtbase_x64-windows/include/Qt6/QtGui"
+    "${PLATFORM_THIRDPARTY_DIR}/qtbase_x64-windows/include/Qt6/QtOpenGL"
+    "${PLATFORM_THIRDPARTY_DIR}/qtbase_x64-windows/include/Qt6/QtOpenGLWidgets"
     "${PLATFORM_THIRDPARTY_DIR}/opengl_x64-windows-static/include"
     "${PLATFORM_THIRDPARTY_DIR}/box2D/include"
     "${PLATFORM_THIRDPARTY_DIR}/box2d_x64-windows-static/include"
@@ -803,27 +805,7 @@ endif()
 
 
 
-# Create CLI executable
-set(CLI_SOURCES src/cli/main.cpp src/cli/CLICommands.cpp)
-if(WIN32)
-    set(CLI_SOURCES ${CLI_SOURCES} src/cli/resources/lupine-cli.rc)
-endif()
-add_executable(lupine-cli ${CLI_SOURCES})
-target_link_libraries(lupine-cli LupineEngine)
-
-# Set console subsystem for CLI
-set_target_properties(lupine-cli PROPERTIES
-    WIN32_EXECUTABLE FALSE
-)
-
-# Apply same linker options to CLI executable
-if(WIN32)
-    target_link_options(lupine-cli PRIVATE
-        $<$<CONFIG:Debug>:/NODEFAULTLIB:MSVCRT>
-        $<$<CONFIG:Release>:/NODEFAULTLIB:MSVCRTD>
-        /SUBSYSTEM:CONSOLE
-    )
-endif()
+# CLI target removed as requested by user
 
 # Create runtime executable
 set(RUNTIME_SOURCES src/runtime/main.cpp)
@@ -1134,7 +1116,7 @@ if(BUILD_WEB_TEMPLATE AND EMSCRIPTEN)
 endif()
 
 # Set output directories
-set_target_properties(LupineEngine lupine-cli lupine-runtime
+set_target_properties(LupineEngine lupine-runtime
     PROPERTIES
     ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib"
     LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib"
@@ -1201,5 +1183,3 @@ if(WIN32 AND FALSE)  # Disabled for full static linking
         )
     endif()
 endif()
-
-# Test executables removed for release builds
