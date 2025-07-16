@@ -39,7 +39,7 @@ Coming Soon
 Due to an issue in my development environment, the make file is currently hardcoded to find the packages it needs, to build it you need to either update it to point to your local packages for these files or edit the makefile to use vcpkg/conan/toolchain of choice.
 
 ## Community and Contribution
-(Discord Server Coming Soon)
+**Discord Server** : https://discord.gg/AV54njC6
 </br>
 There are many ways you can contribute to the project, and they're all ever valuable, from contributing directly to source code, to reporting bugs, to requesting features, any community feedback is greatly appreciated.</br>
 (contribution guide coming soon)
