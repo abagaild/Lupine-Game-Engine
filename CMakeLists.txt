@@ -1,382 +1,230 @@
-cmake_minimum_required(VERSION 3.20)
+cmake_minimum_required(VERSION 3.21)
 
-# Project definition
-project(LupineGameEngine 
+# Set CMake policies
+cmake_policy(SET CMP0148 NEW)  # Use FindPython instead of deprecated modules
+
+# Set vcpkg toolchain before project declaration
+if(DEFINED ENV{VCPKG_ROOT} AND NOT DEFINED CMAKE_TOOLCHAIN_FILE)
+    set(CMAKE_TOOLCHAIN_FILE "$ENV{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake"
+        CACHE STRING "")
+endif()
+
+# Set default vcpkg triplet for static linking
+if(NOT DEFINED VCPKG_TARGET_TRIPLET)
+    if(WIN32)
+        set(VCPKG_TARGET_TRIPLET "x64-windows-static" CACHE STRING "")
+    elseif(UNIX AND NOT APPLE)
+        set(VCPKG_TARGET_TRIPLET "x64-linux" CACHE STRING "")
+    elseif(APPLE)
+        set(VCPKG_TARGET_TRIPLET "x64-osx" CACHE STRING "")
+    endif()
+endif()
+
+# Project declaration
+project(LupineEngine
     VERSION 1.0.0
-    DESCRIPTION "Lupine Game Engine - Cross-platform game development framework"
+    DESCRIPTION "Lupine Game Engine - A modern, cross-platform game engine"
     LANGUAGES CXX C
 )
 
 # Set C++ standard
-set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-# Build configuration
-set(CMAKE_CONFIGURATION_TYPES "Debug;Release" CACHE STRING "" FORCE)
+# Set default build type
 if(NOT CMAKE_BUILD_TYPE)
-    set(CMAKE_BUILD_TYPE "Release" CACHE STRING "Choose the type of build." FORCE)
+    set(CMAKE_BUILD_TYPE "Release" CACHE STRING "Choose the type of build" FORCE)
+    set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS "Debug" "Release" "MinSizeRel" "RelWithDebInfo")
 endif()
-
-# Output directories
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
-set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
-set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
-
-# Multi-config generators (Visual Studio, Xcode)
-foreach(OUTPUTCONFIG ${CMAKE_CONFIGURATION_TYPES})
-    string(TOUPPER ${OUTPUTCONFIG} OUTPUTCONFIG)
-    set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_${OUTPUTCONFIG} ${CMAKE_BINARY_DIR}/bin)
-    set(CMAKE_LIBRARY_OUTPUT_DIRECTORY_${OUTPUTCONFIG} ${CMAKE_BINARY_DIR}/lib)
-    set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY_${OUTPUTCONFIG} ${CMAKE_BINARY_DIR}/lib)
-endforeach()
 
 # Platform detection
 if(WIN32)
-    set(LUPINE_PLATFORM "Windows")
-    set(LUPINE_PLATFORM_LOWER "windows")
+    set(LUPINE_PLATFORM_WINDOWS TRUE)
+elseif(UNIX AND NOT APPLE)
+    set(LUPINE_PLATFORM_LINUX TRUE)
 elseif(APPLE)
-    set(LUPINE_PLATFORM "Mac-OSX")
-    set(LUPINE_PLATFORM_LOWER "macos")
-    if(CMAKE_OSX_ARCHITECTURES STREQUAL "arm64")
-        set(LUPINE_PLATFORM "Mac-ARM64")
-        set(LUPINE_PLATFORM_LOWER "macos-arm64")
-    endif()
-elseif(UNIX)
-    set(LUPINE_PLATFORM "Linux")
-    set(LUPINE_PLATFORM_LOWER "linux")
+    set(LUPINE_PLATFORM_MACOS TRUE)
 endif()
 
-message(STATUS "Building for platform: ${LUPINE_PLATFORM}")
+# Build options
+option(LUPINE_BUILD_EDITOR "Build the Lupine Editor" ON)
+option(LUPINE_BUILD_RUNTIME "Build the Lupine Runtime" ON)
+option(LUPINE_BUILD_TESTS "Build unit tests" OFF)
+option(LUPINE_ENABLE_PYTHON "Enable Python scripting support" ON)
+option(LUPINE_STATIC_RUNTIME "Link runtime libraries statically" ON)
 
-# Options
-option(LUPINE_ENABLE_EDITOR "Build the Lupine Editor" ON)
-option(LUPINE_ENABLE_RUNTIME "Build the Lupine Runtime" ON)
-option(LUPINE_STATIC_LINKING "Use static linking for all dependencies" ON)
-option(LUPINE_ENABLE_EXPORT "Enable export functionality" ON)
+# Set vcpkg features based on options
+set(VCPKG_MANIFEST_FEATURES "")
+if(LUPINE_BUILD_EDITOR)
+    list(APPEND VCPKG_MANIFEST_FEATURES "editor")
+endif()
+if(LUPINE_ENABLE_PYTHON)
+    list(APPEND VCPKG_MANIFEST_FEATURES "python")
+endif()
 
 # Compiler-specific settings
 if(MSVC)
-    # Visual Studio specific settings
-    add_compile_options(/W4 /WX- /MP)
+    # MSVC-specific settings
+    add_compile_options(/W4 /permissive-)
     add_compile_definitions(_CRT_SECURE_NO_WARNINGS)
-    if(LUPINE_STATIC_LINKING)
+    
+    # Static runtime linking for Windows
+    if(LUPINE_STATIC_RUNTIME OR LUPINE_PLATFORM_WINDOWS)
         set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
     endif()
-elseif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
-    # GCC/Clang specific settings
+    
+    # Enable parallel compilation
+    add_compile_options(/MP)
+    
+elseif(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    # GCC/Clang settings
     add_compile_options(-Wall -Wextra -Wpedantic)
-    if(LUPINE_STATIC_LINKING)
+    
+    # Debug settings
+    if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+        add_compile_options(-g -O0)
+        add_compile_definitions(DEBUG)
+    endif()
+    
+    # Static linking for Linux
+    if(LUPINE_STATIC_RUNTIME AND LUPINE_PLATFORM_LINUX)
         set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -static-libgcc -static-libstdc++")
     endif()
 endif()
 
-# Find dependencies
-find_package(PkgConfig QUIET)
-
-# Set up third-party library paths
-set(THIRDPARTY_DIR "${CMAKE_SOURCE_DIR}/thirdparty")
-set(PLATFORM_THIRDPARTY_DIR "${THIRDPARTY_DIR}/${LUPINE_PLATFORM}")
-
-# Add platform-specific library and include paths
-if(EXISTS "${PLATFORM_THIRDPARTY_DIR}")
-    list(APPEND CMAKE_PREFIX_PATH "${PLATFORM_THIRDPARTY_DIR}")
-    list(APPEND CMAKE_LIBRARY_PATH "${PLATFORM_THIRDPARTY_DIR}/lib")
-    list(APPEND CMAKE_INCLUDE_PATH "${PLATFORM_THIRDPARTY_DIR}/include")
-    
-    # Add to environment for find_package
-    set(ENV{PKG_CONFIG_PATH} "${PLATFORM_THIRDPARTY_DIR}/lib/pkgconfig:$ENV{PKG_CONFIG_PATH}")
-    
-    message(STATUS "Using platform-specific libraries from: ${PLATFORM_THIRDPARTY_DIR}")
-endif()
-
-# Function to recursively find source files
-function(lupine_add_sources target_name source_dir)
-    file(GLOB_RECURSE SOURCES 
-        "${source_dir}/*.cpp"
-        "${source_dir}/*.c"
-        "${source_dir}/*.cxx"
-        "${source_dir}/*.cc"
-    )
-    
-    file(GLOB_RECURSE HEADERS
-        "${source_dir}/*.h"
-        "${source_dir}/*.hpp"
-        "${source_dir}/*.hxx"
-    )
-    
-    target_sources(${target_name} PRIVATE ${SOURCES} ${HEADERS})
-    
-    # Add include directories
-    target_include_directories(${target_name} PRIVATE ${source_dir})
-    
-    message(STATUS "Added ${CMAKE_CURRENT_FUNCTION_LIST_LINE} sources to ${target_name} from ${source_dir}")
-endfunction()
-
-# Function to add platform-specific include directories
-function(lupine_add_platform_includes target_name)
-    target_include_directories(${target_name} PRIVATE
-        "${CMAKE_SOURCE_DIR}/include"
-        "${CMAKE_SOURCE_DIR}/include/lupine"
-    )
-
-    if(EXISTS "${PLATFORM_THIRDPARTY_DIR}/include")
-        target_include_directories(${target_name} PRIVATE "${PLATFORM_THIRDPARTY_DIR}/include")
-    endif()
-endfunction()
-
-# Function to find and link libraries
-function(lupine_find_and_link_libraries target_name)
-    # Core dependencies for all targets
-    set(CORE_LIBS "")
-
-    # Platform-specific library linking
-    if(WIN32)
-        # Windows system libraries
-        list(APPEND CORE_LIBS
-            kernel32 user32 gdi32 winspool shell32 ole32 oleaut32 uuid comdlg32 advapi32
-            winmm ws2_32 opengl32
-        )
-    elseif(APPLE)
-        # macOS frameworks
-        find_library(COCOA_FRAMEWORK Cocoa)
-        find_library(OPENGL_FRAMEWORK OpenGL)
-        find_library(IOKIT_FRAMEWORK IOKit)
-        find_library(COREVIDEO_FRAMEWORK CoreVideo)
-        find_library(COREAUDIO_FRAMEWORK CoreAudio)
-        find_library(AUDIOTOOLBOX_FRAMEWORK AudioToolbox)
-
-        list(APPEND CORE_LIBS
-            ${COCOA_FRAMEWORK} ${OPENGL_FRAMEWORK} ${IOKIT_FRAMEWORK}
-            ${COREVIDEO_FRAMEWORK} ${COREAUDIO_FRAMEWORK} ${AUDIOTOOLBOX_FRAMEWORK}
-        )
-    elseif(UNIX)
-        # Linux system libraries
-        find_package(Threads REQUIRED)
-        list(APPEND CORE_LIBS Threads::Threads dl m)
-
-        # X11 and OpenGL
-        find_package(X11)
-        if(X11_FOUND)
-            list(APPEND CORE_LIBS ${X11_LIBRARIES})
-        endif()
-
-        find_package(OpenGL)
-        if(OPENGL_FOUND)
-            list(APPEND CORE_LIBS ${OPENGL_LIBRARIES})
-        endif()
-    endif()
-
-    target_link_libraries(${target_name} PRIVATE ${CORE_LIBS})
-endfunction()
-
-# Create the main engine library
-add_library(LupineEngine STATIC)
-
-# Add all engine source files dynamically
-lupine_add_sources(LupineEngine "${CMAKE_SOURCE_DIR}/src/Animation")
-lupine_add_sources(LupineEngine "${CMAKE_SOURCE_DIR}/src/Art Tools")
-lupine_add_sources(LupineEngine "${CMAKE_SOURCE_DIR}/src/Audio")
-lupine_add_sources(LupineEngine "${CMAKE_SOURCE_DIR}/src/Builders")
-lupine_add_sources(LupineEngine "${CMAKE_SOURCE_DIR}/src/Components")
-lupine_add_sources(LupineEngine "${CMAKE_SOURCE_DIR}/src/Globals")
-lupine_add_sources(LupineEngine "${CMAKE_SOURCE_DIR}/src/Input")
-lupine_add_sources(LupineEngine "${CMAKE_SOURCE_DIR}/src/Localisation")
-lupine_add_sources(LupineEngine "${CMAKE_SOURCE_DIR}/src/Nodes")
-lupine_add_sources(LupineEngine "${CMAKE_SOURCE_DIR}/src/Physics")
-lupine_add_sources(LupineEngine "${CMAKE_SOURCE_DIR}/src/Production")
-lupine_add_sources(LupineEngine "${CMAKE_SOURCE_DIR}/src/Projects")
-lupine_add_sources(LupineEngine "${CMAKE_SOURCE_DIR}/src/Rendering")
-lupine_add_sources(LupineEngine "${CMAKE_SOURCE_DIR}/src/Scenes")
-lupine_add_sources(LupineEngine "${CMAKE_SOURCE_DIR}/src/Scriptable Objects")
-lupine_add_sources(LupineEngine "${CMAKE_SOURCE_DIR}/src/Scripting")
-lupine_add_sources(LupineEngine "${CMAKE_SOURCE_DIR}/src/Tiles")
-lupine_add_sources(LupineEngine "${CMAKE_SOURCE_DIR}/src/Visual Scripting")
-
-# Add include directories and libraries to engine
-lupine_add_platform_includes(LupineEngine)
-lupine_find_and_link_libraries(LupineEngine)
-
-# Set engine properties
-set_target_properties(LupineEngine PROPERTIES
-    OUTPUT_NAME "lupine-engine"
-    ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib"
+# Global compile definitions
+add_compile_definitions(
+    LUPINE_VERSION_MAJOR=${PROJECT_VERSION_MAJOR}
+    LUPINE_VERSION_MINOR=${PROJECT_VERSION_MINOR}
+    LUPINE_VERSION_PATCH=${PROJECT_VERSION_PATCH}
 )
 
-message(STATUS "Configured LupineEngine library")
-
-# Runtime executable
-if(LUPINE_ENABLE_RUNTIME)
-    add_executable(lupine-runtime)
-
-    # Add runtime-specific sources
-    lupine_add_sources(lupine-runtime "${CMAKE_SOURCE_DIR}/src/Runtime")
-
-    # Link with engine library
-    target_link_libraries(lupine-runtime PRIVATE LupineEngine)
-
-    # Add includes and platform libraries
-    lupine_add_platform_includes(lupine-runtime)
-    lupine_find_and_link_libraries(lupine-runtime)
-
-    # Find SDL3 for runtime
-    find_package(PkgConfig QUIET)
-    if(PkgConfig_FOUND)
-        pkg_check_modules(SDL3 QUIET sdl3)
-        if(SDL3_FOUND)
-            target_include_directories(lupine-runtime PRIVATE ${SDL3_INCLUDE_DIRS})
-            target_link_libraries(lupine-runtime PRIVATE ${SDL3_LIBRARIES})
-            target_compile_definitions(lupine-runtime PRIVATE LUPINE_HAS_SDL3)
-        endif()
-    endif()
-
-    # Try to find SDL3 via find_package if pkg-config failed
-    if(NOT SDL3_FOUND)
-        find_package(SDL3 QUIET)
-        if(SDL3_FOUND)
-            target_link_libraries(lupine-runtime PRIVATE SDL3::SDL3)
-            target_compile_definitions(lupine-runtime PRIVATE LUPINE_HAS_SDL3)
-        endif()
-    endif()
-
-    # Set runtime properties
-    set_target_properties(lupine-runtime PROPERTIES
-        OUTPUT_NAME "lupine-runtime"
-        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
-    )
-
-    # Copy icon to output directory
-    if(EXISTS "${CMAKE_SOURCE_DIR}/icon.ico")
-        configure_file("${CMAKE_SOURCE_DIR}/icon.ico" "${CMAKE_BINARY_DIR}/bin/icon.ico" COPYONLY)
-    endif()
-    if(EXISTS "${CMAKE_SOURCE_DIR}/icon.png")
-        configure_file("${CMAKE_SOURCE_DIR}/icon.png" "${CMAKE_BINARY_DIR}/bin/icon.png" COPYONLY)
-    endif()
-
-    message(STATUS "Configured lupine-runtime executable")
+if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+    add_compile_definitions(LUPINE_DEBUG)
 endif()
 
-# Editor executable
-if(LUPINE_ENABLE_EDITOR)
-    add_executable(lupine-editor)
-
-    # Add editor-specific sources
-    lupine_add_sources(lupine-editor "${CMAKE_SOURCE_DIR}/src/Editor")
-
-    # Link with engine library
-    target_link_libraries(lupine-editor PRIVATE LupineEngine)
-
-    # Add includes and platform libraries
-    lupine_add_platform_includes(lupine-editor)
-    lupine_find_and_link_libraries(lupine-editor)
-
-    # Find Qt6 for editor
-    find_package(Qt6 QUIET COMPONENTS Core Widgets Gui)
-    if(Qt6_FOUND)
-        target_link_libraries(lupine-editor PRIVATE Qt6::Core Qt6::Widgets Qt6::Gui)
-        target_compile_definitions(lupine-editor PRIVATE LUPINE_HAS_QT6)
-
-        # Enable Qt MOC
-        set_target_properties(lupine-editor PROPERTIES
-            AUTOMOC ON
-            AUTORCC ON
-            AUTOUIC ON
-        )
-    endif()
-
-    # Set editor properties
-    set_target_properties(lupine-editor PROPERTIES
-        OUTPUT_NAME "lupine-editor"
-        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
-    )
-
-    # Copy icon to output directory
-    if(EXISTS "${CMAKE_SOURCE_DIR}/icon.ico")
-        configure_file("${CMAKE_SOURCE_DIR}/icon.ico" "${CMAKE_BINARY_DIR}/bin/icon.ico" COPYONLY)
-    endif()
-    if(EXISTS "${CMAKE_SOURCE_DIR}/icon.png")
-        configure_file("${CMAKE_SOURCE_DIR}/icon.png" "${CMAKE_BINARY_DIR}/bin/icon.png" COPYONLY)
-    endif()
-
-    message(STATUS "Configured lupine-editor executable")
+# Platform-specific definitions
+if(LUPINE_PLATFORM_WINDOWS)
+    add_compile_definitions(LUPINE_PLATFORM_WINDOWS WIN32_LEAN_AND_MEAN NOMINMAX)
+elseif(LUPINE_PLATFORM_LINUX)
+    add_compile_definitions(LUPINE_PLATFORM_LINUX)
+elseif(LUPINE_PLATFORM_MACOS)
+    add_compile_definitions(LUPINE_PLATFORM_MACOS)
 endif()
 
-# Installation and packaging
-install(TARGETS LupineEngine
-    ARCHIVE DESTINATION lib
-    LIBRARY DESTINATION lib
-    RUNTIME DESTINATION bin
+# Find packages
+find_package(SDL2 CONFIG REQUIRED)
+find_package(SDL2_image CONFIG REQUIRED)
+find_package(SDL2_ttf CONFIG REQUIRED)
+find_package(SDL2_mixer CONFIG REQUIRED)
+find_package(glad CONFIG REQUIRED)
+find_package(glm CONFIG REQUIRED)
+find_package(box2d CONFIG REQUIRED)
+find_package(Bullet CONFIG REQUIRED)
+find_package(assimp CONFIG REQUIRED)
+find_package(Lua REQUIRED)
+
+# Python support (optional)
+if(LUPINE_ENABLE_PYTHON)
+    # Use modern FindPython module
+    find_package(Python3 COMPONENTS Interpreter Development)
+    if(Python3_FOUND)
+        # Set pybind11 to use the modern Python finder
+        set(PYBIND11_FINDPYTHON ON)
+        find_package(pybind11 CONFIG REQUIRED)
+        message(STATUS "Python support enabled with Python ${Python3_VERSION}")
+    else()
+        message(WARNING "Python3 not found, disabling Python support")
+        set(LUPINE_ENABLE_PYTHON OFF)
+    endif()
+endif()
+find_package(yaml-cpp CONFIG REQUIRED)
+find_package(pugixml CONFIG REQUIRED)
+find_package(nlohmann_json CONFIG REQUIRED)
+find_package(spdlog CONFIG REQUIRED)
+find_package(fmt CONFIG REQUIRED)
+
+# Audio libraries
+find_package(SndFile CONFIG REQUIRED)
+find_package(Ogg CONFIG REQUIRED)
+find_package(Vorbis CONFIG REQUIRED)
+find_package(FLAC CONFIG REQUIRED)
+find_package(opus CONFIG REQUIRED)
+
+# Image libraries
+find_package(PNG REQUIRED)
+find_package(JPEG REQUIRED)
+find_package(Freetype REQUIRED)
+
+# Compression libraries
+find_package(ZLIB REQUIRED)
+find_package(BZip2 REQUIRED)
+find_package(lz4 CONFIG REQUIRED)
+find_package(zstd CONFIG REQUIRED)
+
+# Qt for editor (optional)
+if(LUPINE_BUILD_EDITOR)
+    find_package(Qt6 REQUIRED COMPONENTS Core Widgets OpenGL OpenGLWidgets)
+    set(CMAKE_AUTOMOC ON)
+    set(CMAKE_AUTORCC ON)
+    set(CMAKE_AUTOUIC ON)
+endif()
+
+# Add subdirectories
+add_subdirectory(lupine-core)
+
+if(LUPINE_BUILD_RUNTIME)
+    add_subdirectory(lupine-runtime)
+endif()
+
+if(LUPINE_BUILD_EDITOR)
+    add_subdirectory(lupine-engine)
+endif()
+
+# Install configuration
+include(GNUInstallDirs)
+
+# Export targets
+install(EXPORT LupineTargets
+    FILE LupineTargets.cmake
+    NAMESPACE Lupine::
+    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/Lupine
 )
 
-if(LUPINE_ENABLE_RUNTIME)
-    install(TARGETS lupine-runtime
-        RUNTIME DESTINATION bin
-    )
-endif()
-
-if(LUPINE_ENABLE_EDITOR)
-    install(TARGETS lupine-editor
-        RUNTIME DESTINATION bin
-    )
-endif()
-
-# Install headers
-install(DIRECTORY "${CMAKE_SOURCE_DIR}/include/"
-    DESTINATION include
-    FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"
+# Create config file
+include(CMakePackageConfigHelpers)
+configure_package_config_file(
+    "${CMAKE_CURRENT_SOURCE_DIR}/cmake/LupineConfig.cmake.in"
+    "${CMAKE_CURRENT_BINARY_DIR}/LupineConfig.cmake"
+    INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/Lupine
 )
 
-# Install icons
-if(EXISTS "${CMAKE_SOURCE_DIR}/icon.ico")
-    install(FILES "${CMAKE_SOURCE_DIR}/icon.ico" DESTINATION bin)
-endif()
-if(EXISTS "${CMAKE_SOURCE_DIR}/icon.png")
-    install(FILES "${CMAKE_SOURCE_DIR}/icon.png" DESTINATION bin)
-endif()
+write_basic_package_version_file(
+    "${CMAKE_CURRENT_BINARY_DIR}/LupineConfigVersion.cmake"
+    VERSION ${PROJECT_VERSION}
+    COMPATIBILITY SameMajorVersion
+)
 
-# CPack configuration for packaging
-set(CPACK_PACKAGE_NAME "LupineGameEngine")
-set(CPACK_PACKAGE_VERSION "${PROJECT_VERSION}")
-set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "${PROJECT_DESCRIPTION}")
-set(CPACK_PACKAGE_VENDOR "Lupine Game Engine Team")
-set(CPACK_PACKAGE_CONTACT "support@lupine-engine.com")
+install(FILES
+    "${CMAKE_CURRENT_BINARY_DIR}/LupineConfig.cmake"
+    "${CMAKE_CURRENT_BINARY_DIR}/LupineConfigVersion.cmake"
+    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/Lupine
+)
 
-# Platform-specific packaging
-if(WIN32)
-    set(CPACK_GENERATOR "ZIP;NSIS")
-    set(CPACK_NSIS_DISPLAY_NAME "Lupine Game Engine")
-    set(CPACK_NSIS_PACKAGE_NAME "LupineGameEngine")
-    set(CPACK_NSIS_CONTACT "support@lupine-engine.com")
-    if(EXISTS "${CMAKE_SOURCE_DIR}/icon.ico")
-        set(CPACK_NSIS_MUI_ICON "${CMAKE_SOURCE_DIR}/icon.ico")
-        set(CPACK_NSIS_MUI_UNIICON "${CMAKE_SOURCE_DIR}/icon.ico")
-    endif()
-elseif(APPLE)
-    set(CPACK_GENERATOR "ZIP;DragNDrop")
-    set(CPACK_DMG_VOLUME_NAME "Lupine Game Engine")
-    if(EXISTS "${CMAKE_SOURCE_DIR}/icon.png")
-        set(CPACK_DMG_DS_STORE_SETUP_SCRIPT "${CMAKE_SOURCE_DIR}/icon.png")
-    endif()
-elseif(UNIX)
-    set(CPACK_GENERATOR "TGZ;DEB")
-    set(CPACK_DEBIAN_PACKAGE_MAINTAINER "Lupine Game Engine Team")
-    set(CPACK_DEBIAN_PACKAGE_SECTION "games")
-    set(CPACK_DEBIAN_PACKAGE_PRIORITY "optional")
-endif()
-
-include(CPack)
-
-# Summary
+# Print configuration summary
 message(STATUS "")
-message(STATUS "=== Lupine Game Engine Build Configuration ===")
-message(STATUS "Platform: ${LUPINE_PLATFORM}")
-message(STATUS "Build Type: ${CMAKE_BUILD_TYPE}")
-message(STATUS "C++ Standard: ${CMAKE_CXX_STANDARD}")
-message(STATUS "Static Linking: ${LUPINE_STATIC_LINKING}")
-message(STATUS "Enable Runtime: ${LUPINE_ENABLE_RUNTIME}")
-message(STATUS "Enable Editor: ${LUPINE_ENABLE_EDITOR}")
-message(STATUS "Enable Export: ${LUPINE_ENABLE_EXPORT}")
-message(STATUS "Output Directory: ${CMAKE_BINARY_DIR}/bin")
-message(STATUS "Third-party Directory: ${PLATFORM_THIRDPARTY_DIR}")
-message(STATUS "===============================================")
+message(STATUS "Lupine Engine Configuration Summary:")
+message(STATUS "  Version: ${PROJECT_VERSION}")
+message(STATUS "  Build type: ${CMAKE_BUILD_TYPE}")
+message(STATUS "  Platform: ${CMAKE_SYSTEM_NAME}")
+message(STATUS "  Compiler: ${CMAKE_CXX_COMPILER_ID}")
+message(STATUS "  C++ Standard: ${CMAKE_CXX_STANDARD}")
+message(STATUS "")
+message(STATUS "Build Options:")
+message(STATUS "  Build Editor: ${LUPINE_BUILD_EDITOR}")
+message(STATUS "  Build Runtime: ${LUPINE_BUILD_RUNTIME}")
+message(STATUS "  Build Tests: ${LUPINE_BUILD_TESTS}")
+message(STATUS "  Enable Python: ${LUPINE_ENABLE_PYTHON}")
+message(STATUS "  Static Runtime: ${LUPINE_STATIC_RUNTIME}")
 message(STATUS "")
